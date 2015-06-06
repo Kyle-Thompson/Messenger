@@ -11,9 +11,9 @@
  
 int main(void)
 {
-  int sockfd = 0,n = 0;
+  int sockfd = 0;
   char recvBuff[1024];
-  char message[1024] = "";
+  char sendBuff[1024] = "";
   struct sockaddr_in serv_addr;
  
   memset(recvBuff, '0' ,sizeof(recvBuff));
@@ -31,30 +31,31 @@ int main(void)
     return 1;
   }
  
-  while(strncmp(message, "exit", 4) != 0) {
-    fputs("Enter a message: ", stdout);
-    fgets(message, sizeof(message), stdin);
+  pid_t pid = fork();
+  if (pid) {
+    while (strncmp(recvBuff, "exit", 4) != 0) {
+      if(recv(sockfd, recvBuff, sizeof(recvBuff)-1, 0) < 0)
+        printf("Error: Recieve\nErrno: %d\n", errno);
+      recvBuff[1024] = 0;
 
-    if(send(sockfd, message, sizeof(message), 0) < 0) {
-      printf("Error: Send");
-      printf("Errno: %d\n", errno);
+      printf("Server: %s", recvBuff);
     }
-
-    if( (n = recv(sockfd, recvBuff, sizeof(recvBuff)-1, 0)) < 0) {
-      printf("Error: Recieve");
-      printf("Errno: %d\n", errno);
+    
+    wait(&pid);
+    close(sockfd);
+    
+  } else {
+    while (strncmp(sendBuff, "exit", 4) != 0) {
+      fputs("Enter a message: ", stdout);
+      fgets(sendBuff, sizeof(sendBuff), stdin);
+      
+      if(send(sockfd, sendBuff, sizeof(sendBuff), 0) < 0)
+        printf("Error: Send\nErrno: %d\n", errno);
     }
-    recvBuff[n] = 0;
-
-    if(fputs(recvBuff, stdout) == EOF)
-      printf("\nError: fputs");
-    printf("\n");
+    close(sockfd);
+    exit(0);
   }
- 
-  if( n < 0) {
-    printf("\n Read Error \n");
-  }
- 
+  
   return 0;
 }
 

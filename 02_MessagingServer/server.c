@@ -28,29 +28,39 @@ int main() {
  
   bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
 
-  if(listen(listenfd, 10) == -1) {
+  if (listen(listenfd, 10) == -1) {
     printf("Failed to listen\n");
     return -1;
   }
 
-  connfd = accept(listenfd, (struct sockaddr*)NULL ,NULL);   
+  connfd = accept(listenfd, (struct sockaddr*)NULL ,NULL);
+  
+  pid_t pid = fork();
+  if (pid) {
+    while (strncmp(recvBuff, "exit", 4) != 0) {
+      if(recv(connfd, recvBuff, sizeof(recvBuff)-1, 0) < 0)
+        printf("Error: Recieve\nErrno: %d\n", errno);
+      recvBuff[1024] = 0;
 
-  while(strncmp(recvBuff, "exit", 4) != 0) {  
-    if(recv(connfd, recvBuff, sizeof(recvBuff)-1, 0) < 0) {
-      printf("Error: Recieve\n");
-      printf("Errno: %d\n", errno); 
+      printf("Client: %s", recvBuff);
     }
-    recvBuff[1024] = 0;
-
-    printf("Recieved: %s", recvBuff);
-
-    strncpy(sendBuff, recvBuff, sizeof(sendBuff));
-    if(send(connfd, sendBuff, strlen(sendBuff), 0) < 0) {
-      printf("Error: Send\n");
-      printf("Errno: %d\n", errno);
+    
+    wait(&pid);
+    close(connfd);
+    
+  } else {
+    while (strncmp(sendBuff, "exit", 4) != 0) {
+      fputs("Enter a message: ", stdout);
+      fgets(sendBuff, sizeof(sendBuff), stdin);
+      
+      if(send(connfd, sendBuff, sizeof(sendBuff), 0) < 0)
+        printf("Error: Send\nErrno: %d\n", errno);
     }
+    close(connfd);
+    exit(0);
   }
-  close(connfd); 
+
+  close(listenfd); 
  
   return 0;    
 
