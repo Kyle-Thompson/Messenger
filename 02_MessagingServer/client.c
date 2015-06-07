@@ -11,9 +11,10 @@
  
 int main(void)
 {
+  printf("I AM THE CLIENT\n");
   int sockfd = 0;
   char recvBuff[1024];
-  char sendBuff[1024] = "";
+  char sendBuff[1024];
   struct sockaddr_in serv_addr;
  
   memset(recvBuff, '0' ,sizeof(recvBuff));
@@ -34,9 +35,10 @@ int main(void)
   pid_t pid = fork();
   if (pid) {
     while (strncmp(recvBuff, "exit", 4) != 0) {
-      if(recv(sockfd, recvBuff, sizeof(recvBuff)-1, 0) < 0)
-        printf("Error: Recieve\nErrno: %d\n", errno);
-      recvBuff[1024] = 0;
+      // why the fucking shit do i have to have +1 to the sizeof()?????????
+      if(recv(sockfd, recvBuff, sizeof(recvBuff) +1, 0) < 0)
+        printf("Error: Receive\nErrno: %d\n", errno);
+      recvBuff[1023] = 0;
 
       printf("Server: %s", recvBuff);
     }
@@ -46,7 +48,7 @@ int main(void)
     
   } else {
     while (strncmp(sendBuff, "exit", 4) != 0) {
-      fputs("Enter a message: ", stdout);
+      fputs("(Client) Enter a message: ", stdout);
       fgets(sendBuff, sizeof(sendBuff), stdin);
       
       if(send(sockfd, sendBuff, sizeof(sendBuff), 0) < 0)
@@ -58,4 +60,3 @@ int main(void)
   
   return 0;
 }
-

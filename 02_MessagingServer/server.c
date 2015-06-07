@@ -9,13 +9,13 @@
 #include <sys/types.h>
 
 int main() {
-
+printf("I AM THE SERVER\n");
   int listenfd = 0, connfd = 0;
   
   struct sockaddr_in serv_addr;
  
   char sendBuff[1025];
-  char recvBuff[1025] = "test"; 
+  char recvBuff[1025]; 
  
   listenfd = socket(AF_INET, SOCK_STREAM, 0);
   
@@ -38,9 +38,9 @@ int main() {
   pid_t pid = fork();
   if (pid) {
     while (strncmp(recvBuff, "exit", 4) != 0) {
-      if(recv(connfd, recvBuff, sizeof(recvBuff)-1, 0) < 0)
-        printf("Error: Recieve\nErrno: %d\n", errno);
-      recvBuff[1024] = 0;
+      if(recv(connfd, recvBuff, sizeof(recvBuff), 0) < 0)
+        printf("Error: Receive\nErrno: %d\n", errno);
+      recvBuff[1023] = 0;
 
       printf("Client: %s", recvBuff);
     }
@@ -50,7 +50,7 @@ int main() {
     
   } else {
     while (strncmp(sendBuff, "exit", 4) != 0) {
-      fputs("Enter a message: ", stdout);
+      fputs("(Server) Enter a message: ", stdout);
       fgets(sendBuff, sizeof(sendBuff), stdin);
       
       if(send(connfd, sendBuff, sizeof(sendBuff), 0) < 0)
