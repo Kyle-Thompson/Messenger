@@ -1,68 +1,101 @@
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <sys/wait.h>
-#include <arpa/inet.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
+#include "header.h"
+
 #include <errno.h>
 #include <string.h>
 #include <sys/types.h>
 
+/*for getting file size using stat()*/
+#include <sys/stat.h>
+ 
+/*for sendfile()*/
+#include <sys/sendfile.h>
+ 
+/*for O_RDONLY*/
+#include <fcntl.h>
+
+
+void ls  (char* command, int client_socket);
+void get (char* command, int client_socket);
+void put (char* command, int client_socket);
+void cd  (char* command, int client_socket);
+void mkdr(char* command, int client_socket);
+void err (char* command, int client_socket);
+
 int main() {
-printf("I AM THE SERVER\n");
-  int listenfd = 0, connfd = 0;
+	int server_socket = 0, client_socket = 0;
+
+	struct sockaddr_in serv_addr;
+
+	//char sendBuff[BUFFER+1]; // Is this needed right here?
+	char recvBuff[BUFFER+1];
+	char command[6];
+
+	char request[6][6] = {"ls", "get", "put", "cd", "mkdir", "err"};
+	int (*request_handler[6]) (char* command, int client_socket);
+	request_handler[0] = ls;
+	request_handler[1] = get;
+	request_handler[2] = put;
+	request_handler[3] = cd;
+	request_handler[4] = mkdr;
+	request_handler[5] = err;
+
+	if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+		printf("socket error\n");
+		return -1;
+	}
+
+	memset(&serv_addr, '0', sizeof(serv_addr));
+	//memset(sendBuff, '0', sizeof(sendBuff));
+	memset(recvBuff, '0', sizeof(recvBuff));
+
+	serv_addr.sin_family = AF_INET;    
+	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
+	serv_addr.sin_port = htons(PORT);
+
+	if (bind(server_socket, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+		printf("bind error\n");
+		return -1;
+	}
+
+	if (listen(server_socket, MAXPENDING) < 0) {
+		printf("listen error\n");
+		return -1;
+	}
+
+	if (client_socket = accept(server_socket, (struct sockaddr*)NULL ,NULL) < 0) {
+		printf("accept error\n");
+		return -1
+	}
   
-  struct sockaddr_in serv_addr;
- 
-  char sendBuff[1025];
-  char recvBuff[1025]; 
- 
-  listenfd = socket(AF_INET, SOCK_STREAM, 0);
-  
-  memset(&serv_addr, '0', sizeof(serv_addr));
-  memset(sendBuff, '0', sizeof(sendBuff));
 
-  serv_addr.sin_family = AF_INET;    
-  serv_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
-  serv_addr.sin_port = htons(5000);    
- 
-  bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
+	while (strncmp(recvBuff, "exit", 4) != 0) {
+		if(recv(client_socket, recvBuff, BUFFER, 0) < 0)
+			printf("Error: Receive\nErrno: %d\n", errno);
+		recvBuff[BUFFER] = '\n';
 
-  if (listen(listenfd, 10) == -1) {
-    printf("Failed to listen\n");
-    return -1;
-  }
+		sscanf(recvBuff, "%s", command);
+		command[5] = '\n';
 
-  connfd = accept(listenfd, (struct sockaddr*)NULL ,NULL);
-  
-  pid_t pid = fork();
-  if (pid) {
-    while (strncmp(recvBuff, "exit", 4) != 0) {
-      if(recv(connfd, recvBuff, sizeof(recvBuff), 0) < 0)
-        printf("Error: Receive\nErrno: %d\n", errno);
-      recvBuff[1023] = 0;
+		if (strcmp(command, "exit") == 0) break;
 
-      printf("Client: %s", recvBuff);
-    }
-    
-    wait(&pid);
-    close(connfd);
-    
-  } else {
-    while (strncmp(sendBuff, "exit", 4) != 0) {
-      fputs("(Server) Enter a message: ", stdout);
-      fgets(sendBuff, sizeof(sendBuff), stdin);
-      
-      if(send(connfd, sendBuff, sizeof(sendBuff), 0) < 0)
-        printf("Error: Send\nErrno: %d\n", errno);
-    }
-    close(connfd);
-    exit(0);
-  }
+		// Handle request
+		for (int i = 0; i < 6; ++i)
+			if (strcmp(command, request[i]) == 0 || i == 5)
+				request_handler[i](recvBuff, client_socket);
+	}
 
-  close(listenfd); 
- 
-  return 0;    
+	close(client_socket);
+	close(server_socket); 
 
+	return 0;    
 }
+
+	// while (strncmp(sendBuff, "exit", 4) != 0) {
+	// 	  fputs("(Server) Enter a message: ", stdout);
+	// 	  fgets(sendBuff, sizeof(sendBuff), stdin);
+
+	// 	  if(send(client_socket, sendBuff, sizeof(sendBuff), 0) < 0)
+	// 		  printf("Error: Send\nErrno: %d\n", errno);
+	// }
+	// close(client_socket);
+	// exit(0);

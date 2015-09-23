@@ -1,11 +1,5 @@
 #include "header.h"
 
-#include <netinet/in.h>
-#include <netdb.h>
-#include <string.h>
-
-#include <errno.h>
- 
 int main(void)
 {
   printf("I AM THE CLIENT\n");
@@ -32,7 +26,7 @@ int main(void)
   pid_t pid = fork();
   if (pid) {
     while (strncmp(recvBuff, "exit", 4) != 0) {
-      // why the fucking shit do i have to have +1 to the sizeof()?????????
+      // why do i have to have +1 to the sizeof()?????????
       if(recv(sockfd, recvBuff, sizeof(recvBuff) +1, 0) < 0)
         printf("Error: Receive\nErrno: %d\n", errno);
       recvBuff[1023] = 0;
