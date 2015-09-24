@@ -1,13 +1,12 @@
 #include "common.h"
 
 int main() {
-printf("I AM THE SERVER\n");
   int listenfd = 0, connfd = 0;
   
   struct sockaddr_in serv_addr;
  
-  char sendBuff[1025];
-  char recvBuff[1025]; 
+  char sendBuff[BUFFER+1];
+  char recvBuff[BUFFER+1]; 
  
   listenfd = socket(AF_INET, SOCK_STREAM, 0);
   
@@ -32,7 +31,7 @@ printf("I AM THE SERVER\n");
     while (strncmp(recvBuff, "exit", 4) != 0) {
       if(recv(connfd, recvBuff, sizeof(recvBuff), 0) < 0)
         printf("Error: Receive\nErrno: %d\n", errno);
-      recvBuff[1023] = 0;
+      recvBuff[BUFFER] = '\n';
 
       printf("Client: %s", recvBuff);
     }
