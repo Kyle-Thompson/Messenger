@@ -1,30 +1,31 @@
 #include "common.h"
 
 int main() {
+    // Initialize
     int server_socket = 0, client_socket = 0;
-
     struct sockaddr_in serv_addr;
-
     char sendBuff[BUFFER+1];
     char recvBuff[BUFFER+1]; 
 
+    // Zero out memory of serv_addr.
     memset(&serv_addr, '0', sizeof(serv_addr));
-    memset(sendBuff, '0', sizeof(sendBuff));
 
+    // Initialize values of struct serv_addr.
     serv_addr.sin_family = AF_INET;    
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
     serv_addr.sin_port = htons(PORT);  
     
-    server_socket = socket(AF_INET, SOCK_STREAM, 0);  
+    // Connect to a socket.
+    server_socket = Socket(AF_INET, SOCK_STREAM, 0);  
+    
+    // Bind socket.
+    Bind(server_socket, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
 
-    bind(server_socket, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
+    // Listen on server.
+    Listen(server_socket, MAXPENDING);
 
-    if (listen(server_socket, 10) == -1) {
-        printf("Failed to listen\n");
-        return -1;
-    }
-
-    client_socket = accept(server_socket, (struct sockaddr*)NULL ,NULL);
+    // Accept incoming request from client.
+    client_socket = Accept(server_socket, (struct sockaddr*)NULL ,NULL);
 
     pid_t pid = fork();
     if (pid) {

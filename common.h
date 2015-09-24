@@ -11,3 +11,9 @@
 
 #define BUFFER 1024
 #define PORT 5000
+#define MAXPENDING 3
+
+int Socket(int, int, int);
+void Bind(int, const struct sockaddr *, socklen_t);
+void Listen(int, int);
+int Accept(int, struct sockaddr *restrict, socklen_t *restrict);
