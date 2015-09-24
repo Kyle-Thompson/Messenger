@@ -1,3 +1,0 @@
-A simple client server networking example where the client
-sends a message to the server which the server prints to it's
-terminal and then echos it back to the client.
