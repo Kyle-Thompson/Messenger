@@ -13,7 +13,7 @@ int main(void) {
   }
  
   serv_addr.sin_family = AF_INET;
-  serv_addr.sin_port = htons(5000);
+  serv_addr.sin_port = htons(PORT);
   serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
  
   if(connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {

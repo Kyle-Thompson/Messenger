@@ -10,3 +10,4 @@
 #include <netdb.h>
 
 #define BUFFER 1024
+#define PORT 5000
