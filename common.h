@@ -18,5 +18,6 @@ int Socket(int, int, int);
 void Bind(int, const struct sockaddr *, socklen_t);
 void Listen(int, int);
 int Accept(int, struct sockaddr *restrict, socklen_t *restrict);
+void Connect(int, const struct sockaddr *, socklen_t);
 int Send(int, const void *, size_t, int);
 int Recv(int, void *, size_t, int);

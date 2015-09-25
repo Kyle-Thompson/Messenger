@@ -32,6 +32,13 @@ int Accept(int socket, struct sockaddr *restrict address, socklen_t *restrict ad
     return file_descriptor;
 }
 
+void Connect(int socket, const struct sockaddr *address, socklen_t address_len) {
+    if (connect(socket, address, address_len) < 0) {
+        printf("Error: connect()\nErrno: %d %s\n", errno, strerror(errno));
+        exit(1);
+    }
+}
+
 int Send(int sockfd, const void *buf, size_t len, int flags) {
     int msg_length = 0;
     if ((msg_length = send(sockfd, buf, len, flags)) < 0) {
