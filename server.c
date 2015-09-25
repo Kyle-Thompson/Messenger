@@ -30,8 +30,7 @@ int main() {
     pid_t pid = fork();
     if (pid) { // Handle incoming messages
         while (strncmp(recvBuff, ":exit", 5) != 0) {
-            if(recv(client_socket, recvBuff, sizeof(recvBuff), 0) < 0)
-                printf("Error: Receive\nErrno: %d\n", errno);
+            Recv(client_socket, recvBuff, sizeof(recvBuff), 0);
             recvBuff[BUFFER] = '\n';
 
             printf("Client: %s", recvBuff);
@@ -45,8 +44,7 @@ int main() {
             fputs("(Server) Enter a message: ", stdout);
             fgets(sendBuff, sizeof(sendBuff), stdin);
 
-            if(send(client_socket, sendBuff, sizeof(sendBuff), 0) < 0)
-                printf("Error: Send\nErrno: %d\n", errno);
+            Send(client_socket, sendBuff, sizeof(sendBuff), 0);
         }
         
         close(client_socket);

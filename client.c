@@ -24,11 +24,10 @@ int main(void) {
     pid_t pid = fork();
     if (pid) {
         while (strncmp(recvBuff, ":exit", 5) != 0) {
-            if(recv(sockfd, recvBuff, sizeof(recvBuff), 0) < 0)
-                printf("Error: Receive\nErrno: %d\n", errno);
+            Recv(sockfd, recvBuff, sizeof(recvBuff), 0);
             recvBuff[BUFFER] = '\n';
 
-        printf("Server: %s", recvBuff);
+            printf("Server: %s", recvBuff);
         }
 
         wait(&pid);
@@ -39,8 +38,7 @@ int main(void) {
             fputs("(Client) Enter a message: ", stdout);
             fgets(sendBuff, sizeof(sendBuff), stdin);
 
-            if(send(sockfd, sendBuff, sizeof(sendBuff), 0) < 0)
-                printf("Error: Send\nErrno: %d\n", errno);
+            Send(sockfd, sendBuff, sizeof(sendBuff), 0);
         }
         close(sockfd);
         exit(0);
