@@ -53,8 +53,5 @@ int main() {
         exit(0);
     }
 
-    close(server_socket); 
-
-    return 0;    
-
+    close(server_socket);
 }
