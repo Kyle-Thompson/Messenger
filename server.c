@@ -1,11 +1,11 @@
 #include "common.h"
 
 int main() {
-    // Initialize
+    // Initialize sockets and the buffers.
     int server_socket = 0, client_socket = 0;
     char recvBuff[BUFFER+1], sendBuff[BUFFER+1];
 
-    // Initialize values of struct serv_addr.
+    // Create and initialize serv_addr.
     struct sockaddr_in serv_addr;
     memset(&serv_addr, '0', sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;   
@@ -18,14 +18,14 @@ int main() {
     // Bind socket.
     Bind(server_socket, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
 
-    // Listen on server.
+    // Listen.
     Listen(server_socket, MAXPENDING);
 
     // Accept incoming request from client.
     client_socket = Accept(server_socket, (struct sockaddr*)NULL ,NULL);
 
     pid_t pid = fork();
-    if (pid) { // Handle incoming messages
+    if (pid) { // Handle incoming messages.
         while (strncmp(recvBuff, ":exit", 5) != 0) {
             Recv(client_socket, recvBuff, sizeof(recvBuff), 0);
             recvBuff[BUFFER] = '\n';
@@ -36,7 +36,7 @@ int main() {
         wait(&pid);
         close(client_socket);
 
-    } else { // Handle outgoing messages
+    } else { // Handle outgoing messages.
         while (strncmp(sendBuff, ":exit", 5) != 0) {
             fputs("(Server) Enter a message: ", stdout);
             fgets(sendBuff, sizeof(sendBuff), stdin);

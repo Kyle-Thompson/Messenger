@@ -1,41 +1,44 @@
 #include "common.h"
 
 int main(void) {
-    int sockfd = 0;
-    char recvBuff[BUFFER+1];
-    char sendBuff[BUFFER+1];
+    // Initialize socket_fd and the buffers.
+    int socket_fd = 0;
+    char recvBuff[BUFFER+1], sendBuff[BUFFER+1];
+
+    // Create and initialize serv_addr.
     struct sockaddr_in serv_addr;
-
-    memset(recvBuff, '0' ,sizeof(recvBuff));
-
-    sockfd = Socket(AF_INET, SOCK_STREAM, 0);
-
+    memset(recvBuff, '0', sizeof(recvBuff));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(PORT);
-    serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    serv_addr.sin_addr.s_addr = inet_addr(SERVER_IP);
     
-    Connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
+    // Connect to a socket.
+    socket_fd = Socket(AF_INET, SOCK_STREAM, 0);
+
+    // Connect to other client.
+    Connect(socket_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
 
     pid_t pid = fork();
-    if (pid) {
+    if (pid) { // Handle incoming messages.
         while (strncmp(recvBuff, ":exit", 5) != 0) {
-            Recv(sockfd, recvBuff, sizeof(recvBuff), 0);
+            Recv(socket_fd, recvBuff, sizeof(recvBuff), 0);
             recvBuff[BUFFER] = '\n';
 
             printf("Server: %s", recvBuff);
         }
 
         wait(&pid);
-        close(sockfd);
+        close(socket_fd);
 
-    } else {
+    } else { // Handle outgoing messages.
         while (strncmp(sendBuff, ":exit", 5) != 0) {
             fputs("(Client) Enter a message: ", stdout);
             fgets(sendBuff, sizeof(sendBuff), stdin);
 
-            Send(sockfd, sendBuff, sizeof(sendBuff), 0);
+            Send(socket_fd, sendBuff, sizeof(sendBuff), 0);
         }
-        close(sockfd);
+
+        close(socket_fd);
         exit(0);
     }
 }

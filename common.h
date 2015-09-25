@@ -13,6 +13,7 @@
 #define BUFFER 1024
 #define PORT 5000
 #define MAXPENDING 3
+#define SERVER_IP "127.0.0.1"
 
 int Socket(int, int, int);
 void Bind(int, const struct sockaddr *, socklen_t);
