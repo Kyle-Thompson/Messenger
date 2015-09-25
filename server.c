@@ -3,17 +3,14 @@
 int main() {
     // Initialize
     int server_socket = 0, client_socket = 0;
-    struct sockaddr_in serv_addr;
-    char sendBuff[BUFFER+1];
-    char recvBuff[BUFFER+1]; 
-
-    // Zero out memory of serv_addr.
-    memset(&serv_addr, '0', sizeof(serv_addr));
+    char recvBuff[BUFFER+1], sendBuff[BUFFER+1];
 
     // Initialize values of struct serv_addr.
-    serv_addr.sin_family = AF_INET;    
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
+    struct sockaddr_in serv_addr;
+    memset(&serv_addr, '0', sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;   
     serv_addr.sin_port = htons(PORT);  
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
     
     // Connect to a socket.
     server_socket = Socket(AF_INET, SOCK_STREAM, 0);  
