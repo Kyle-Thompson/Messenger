@@ -28,7 +28,7 @@ int main() {
     client_socket = Accept(server_socket, (struct sockaddr*)NULL ,NULL);
 
     pid_t pid = fork();
-    if (pid) {
+    if (pid) { // Handle incoming messages
         while (strncmp(recvBuff, ":exit", 5) != 0) {
             if(recv(client_socket, recvBuff, sizeof(recvBuff), 0) < 0)
                 printf("Error: Receive\nErrno: %d\n", errno);
@@ -40,7 +40,7 @@ int main() {
         wait(&pid);
         close(client_socket);
 
-    } else {
+    } else { // Handle outgoing messages
         while (strncmp(sendBuff, ":exit", 5) != 0) {
             fputs("(Server) Enter a message: ", stdout);
             fgets(sendBuff, sizeof(sendBuff), stdin);
