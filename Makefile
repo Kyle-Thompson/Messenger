@@ -1,4 +1,4 @@
-C = gcc -Wall -std=c11 -o
+C = g++ -Wall -std=c++14 -o
 
 all:	client server
 

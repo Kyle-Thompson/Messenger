@@ -23,7 +23,7 @@ void Listen(int sockfd, int backlog) {
     }
 }
 
-int Accept(int socket, struct sockaddr *restrict address, socklen_t *restrict address_len) {
+int Accept(int socket, struct sockaddr *address, socklen_t *address_len) {
     int file_descriptor = 0;
     if ((file_descriptor = accept(socket, address, address_len)) < 0) {
         printf("Error: accept()\nErrno: %d %s\n", errno, strerror(errno));
