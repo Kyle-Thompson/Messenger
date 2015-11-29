@@ -11,6 +11,8 @@
 #include <netdb.h>
 #include <ncurses.h>
 
+#include <iostream>
+
 #define BUFFER 1024
 #define PORT 5000
 #define MAXPENDING 3
