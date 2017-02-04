@@ -1,5 +1,7 @@
-use std::io;
+mod io_lib;
+mod net_lib;
 
+static NET : &'static UdpSocket = UdpSocket::bind("127.0.0.1:5000").expect("Couldn't bind to socket");
 
 struct User {
     handle: String,
@@ -9,20 +11,25 @@ struct User {
 }
 
 fn main() {
+    let user = login();
+    println!("{}, {}", user.handle, user.password);
+
+}
+
+fn login() -> User {
     
-    // login
     let mut username = String::new();
     let mut password = String::new();
-    loop {
-        print!("username: ");
-        io::stdin().read_line(&mut username);
-        print!("password: ");
-        io::stdin().read_line(&mut password);
 
-        println!("Your username and password is {} and {}", username, password);
+    loop {
+        io_lib::read_prompted_line(&mut username, "username: ");
+        io_lib::read_prompted_line(&mut password, "password: ");
+
         break;
     }
-    
-    
-    println!("Hello, world!");
+
+    User { 
+        handle: username.trim().to_string(), 
+        password: password.trim().to_string()
+    }
 }
