@@ -16,7 +16,7 @@ impl Net {
         }
     }
 
-    //fn authenticate_user(&self, username: &String, password: &String) {
+    fn authenticate_user(&self, username: &String, password: &String) {
         
-    //}
+    }
 }
