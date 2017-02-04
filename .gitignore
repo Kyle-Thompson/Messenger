@@ -1,4 +1,2 @@
-*.o
-server
-client
-*.swp
+target/
+Cargo.lock
