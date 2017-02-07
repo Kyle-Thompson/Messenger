@@ -1,0 +1,2 @@
+ - Main thread listens forever with a socket on a known port. When it receives an messages it hands it off to a handler thread and continues to listen.
+
