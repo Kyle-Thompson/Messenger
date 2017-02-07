@@ -1,7 +1,4 @@
-use std::net::{UdpSocket, Ipv4Addr, SocketAddrV4};
-
-static SERVER_IP : &'static str = "192.168.0.1";
-static SERVER_PORT : &'static str = "5000";
+use std::net::{UdpSocket, Ipv4Addr};
 
 pub struct Net {
     socket: UdpSocket,
