@@ -51,9 +51,7 @@ impl Net {
                     let &(ref queue, ref cvar) = &*send_net.work;
                     let (msg, callback) = match {
                         let mut queue = queue.lock().unwrap();
-                        while !queue.is_empty() {
-                            queue = cvar.wait(queue).unwrap();
-                        }
+                        while !queue.is_empty() { queue = cvar.wait(queue).unwrap(); }
                         queue.pop_front()
                     } {
                         Some(MessageContainer{msg: m, callback: c}) => (m, c),
