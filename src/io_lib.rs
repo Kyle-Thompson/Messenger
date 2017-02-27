@@ -1,26 +1,37 @@
-//extern crate pancurses;
-
+use std::thread;
 use std::io::{self, Write};
-use std::sync::mpsc::Sender;
-//use pancurses::*;
+use std::sync::mpsc::{channel, Sender};
 
 pub struct InputHandlerSenders {
-    pub done: Sender<i32>,      // extra input done
+    pub input : Sender<i32>,      // extra input done
     pub output: Sender<String>, // input handler to output
     pub sender: Sender<String>, // input handler to sender
 }
 
 pub struct IOHandler {
-    //window: pancurses::Window,
 }
 
 impl IOHandler {
     pub fn new() -> IOHandler {
-        println!("initializing io handler");
+        println!("Welcome to SecMsg! Enter '/help' to get help or '/login' to get started.");
         io::stdout().flush().expect("Could not flush buffer.");
 
+        // output
+        thread::spawn(move|| {
+
+        });
+
+        // input
+        thread::spawn(move|| {
+            let (done, recv) = channel::<i32>();
+
+            loop {
+
+            }
+        });
+
         IOHandler{
-        //    window : pancurses::initscr(),
+
         }
     }
 
