@@ -3,7 +3,7 @@
 #![allow(unused_mut)]
 #![allow(unused_imports)]
 
-//extern crate rustc_serialize;
+extern crate rustc_serialize;
 
 use std::net::{UdpSocket, SocketAddr};
 use std::thread;

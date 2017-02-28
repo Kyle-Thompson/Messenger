@@ -6,6 +6,7 @@ use std::sync::mpsc::{channel, Sender};
 
 const SERVER_ADDR: &'static str = "159.203.57.173:5000";
 
+#[derive(RustcEncodable)]
 pub enum MessageType { // TODO: fill in later
     Ack,
     Authenticate {
@@ -14,6 +15,7 @@ pub enum MessageType { // TODO: fill in later
     },
 }
 
+#[derive(RustcEncodable)]
 pub struct Message {
     msg_type: MessageType,
     destination: Vec<String>,
