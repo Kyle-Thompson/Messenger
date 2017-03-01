@@ -4,7 +4,7 @@ use std::collections::{VecDeque};
 use std::sync::{Arc, Mutex, Condvar};
 use std::sync::mpsc::{channel, Sender};
 use std::time::Duration;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::str;
 use std::mem;
 
@@ -104,28 +104,46 @@ impl Net {
 
             // Create the message from the raw bytes.
             let message: Message = json::decode(str::from_utf8(&msg_buf).unwrap()).unwrap();
+
+            // TODO: Handle message.
         }
     }
 
     fn sender(net: Net) {
-        let mut socket = UdpSocket::bind("127.0.0.1:0").expect("Couldn't bind socket!");
-        socket.set_read_timeout(Some(Duration::from_millis(1000)))
-            .expect("Couldn't set socket timeout!");
+        //let mut stream = TcpStream::bind("127.0.0.1:0").expect("Couldn't bind socket!");
         let mut element: Option<MessageContainer> = None;
 
         loop {
-            // grab message from queue
+            // Grab message from queue.
             let (mut msg, callback) = match net.send_work.pop() {
                 Some(MessageContainer{msg: m, callback: c}) => (m, c),
                 None => continue,
             };
 
-            // send message off
+            // Connect to the destination.
+            let dest = msg.route.pop().unwrap();
+            let mut stream = TcpStream::connect(dest.as_str()).unwrap();
+
+            // Encode the message.
+            let encoded_msg: String = json::encode(&msg).unwrap();//.as_bytes();
+
+            // Send the message's size.
+            if encoded_msg.len() >= u32::max_value() as usize { continue; }
+            let msg_size: [u8; 4] = unsafe {
+                mem::transmute(encoded_msg.as_bytes().len() as u32)
+            };
+            stream.write(&msg_size).unwrap();
+
+            // Send the message.
+            stream.write(encoded_msg.as_bytes()).unwrap();
+            
+/*
+            // send message off [deprecated]
             let mut buffer = [0; 4096];
             let dest = msg.route.pop().unwrap();
             'send: loop {
-                socket.send_to(json::encode(&msg).unwrap().as_bytes(), dest.as_str())
-                    .expect("Couldn't send data!");
+                //socket.send_to(json::encode(&msg).unwrap().as_bytes(), dest.as_str())
+                //    .expect("Couldn't send data!");
 
                 let mut resp_msg_size: usize;
                 'recv: loop {
@@ -144,7 +162,7 @@ impl Net {
                 let res_msg: Message = json::decode(
                     str::from_utf8(&buffer[..resp_msg_size]).unwrap()).unwrap();
 
-            }
+            } */
         }
     }
 
