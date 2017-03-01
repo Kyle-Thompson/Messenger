@@ -8,6 +8,12 @@ pub struct MpmcQueue<T> {
 
 impl<T> MpmcQueue<T> {
 
+    pub fn new() -> MpmcQueue<T> {
+        MpmcQueue {
+            data: Arc::new( (Mutex::new(VecDeque::new()), Condvar::new()) )
+        }
+    }
+
     pub fn pop(&self) -> Option<T> {
         let &(ref queue, ref cvar) = &*self.data;
         let mut queue = queue.lock().unwrap();

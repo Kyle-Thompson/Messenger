@@ -1,10 +1,12 @@
-use std::net::{UdpSocket, Ipv4Addr, SocketAddr};
+use std::net::{UdpSocket, TcpListener, TcpStream, Ipv4Addr, SocketAddr};
 use std::thread::{self, JoinHandle};
 use std::collections::{VecDeque};
 use std::sync::{Arc, Mutex, Condvar};
 use std::sync::mpsc::{channel, Sender};
 use std::time::Duration;
+use std::io::Read;
 use std::str;
+use std::mem;
 
 use rustc_serialize::json;
 
@@ -38,95 +40,115 @@ struct MessageContainer {
 
 #[derive(Clone)]
 pub struct Net {
-    work: Arc<(Mutex<VecDeque<MessageContainer>>, Condvar)>,
+    send_work: Arc<MpmcQueue<MessageContainer>>,
+    recv_work: Arc<MpmcQueue<TcpStream>>,
 }
 
 impl Net {
 
     pub fn new() -> Net {
 
+        // The net struct to be returned.
         let mut net = Net {
-            work: Arc::new( (Mutex::new(VecDeque::new()), Condvar::new()) )
+            send_work: Arc::new(MpmcQueue::new()),
+            recv_work: Arc::new(MpmcQueue::new()),
         };
         
-        // senders
+        // Spawning all sender threads.
         for i in 0..16 {
             let send_net = net.clone();
-            thread::spawn(move|| {
-                let mut socket = UdpSocket::bind("127.0.0.1:0").expect("Couldn't bind socket!");
-                socket.set_read_timeout(Some(Duration::from_millis(1000)))
-                    .expect("Couldn't set socket timeout!");
-                let mut element: Option<MessageContainer> = None;
-
-                loop {
-                    // grab message from queue
-                    let &(ref queue, ref cvar) = &*send_net.work;
-                    let (mut msg, callback) = match {
-                        let mut queue = queue.lock().unwrap();
-                        while queue.is_empty() { queue = cvar.wait(queue).unwrap(); }
-                        queue.pop_front()
-                    } {
-                        Some(MessageContainer{msg: m, callback: c}) => (m, c),
-                        None => continue,
-                    };
-
-                    // send message off
-                    let mut buffer = [0; 4096];
-                    let dest = msg.route.pop().unwrap();
-                    'send: loop {
-                        socket.send_to(json::encode(&msg).unwrap().as_bytes(), dest.as_str())
-                            .expect("Couldn't send data!");
-
-                        if msg.msg_type == MessageType::Ack { break; }
-                        
-                        let mut resp_msg_size: usize;
-                        'recv: loop {
-                            match socket.recv_from(&mut buffer) {
-                                Ok((resp_size, resp_src)) => {
-                                    // remove when more advanced sender authentication is used
-                                    if resp_src != dest.parse().unwrap() { continue 'recv; } 
-                                    resp_msg_size = resp_size;
-                                    break 'recv;
-                                },
-                                _  => continue 'send,
-                            }
-                        }
-                        
-                        // TODO: add error handling
-                        let res_msg: Message = json::decode(
-                            str::from_utf8(&buffer[..resp_msg_size]).unwrap()).unwrap();
-
-                    }
-                }
-            });
+            thread::spawn(move|| { Net::sender(send_net); });
         }
        
-        // receiver
+        // Spawn main receiver.
         let recv_net = net.clone();
-        thread::spawn(move|| {
-            let mut socket = UdpSocket::bind("127.0.0.1:5000")
-                .expect("Couldn't bind socket!");
+        thread::spawn(move|| { Net::main_receiver(recv_net); });
 
-            let mut buffer = [0; 4096];
-            loop {
-                let (amt, src) = socket.recv_from(&mut buffer)
-                    .expect("Didn't receive data");
-
-                let recv_net = recv_net.clone();
-                thread::spawn(move|| {
-                    recv_net.receive_handler(src, &buffer[..amt]);
-                });
-            }
-        });
+        // Spawning all receiver handler threads.
+        for i in 0..16 {
+            let recv_net = net.clone();
+            thread::spawn(move|| { Net::receive_handler(recv_net); });
+        }
 
         net
     }
 
-    fn receive_handler(&self, src: SocketAddr, buf: &[u8]) {
+    fn main_receiver(net: Net) {
+        let server = TcpListener::bind("127.0.0.1:5000").unwrap();
 
+        for stream in server.incoming() {
+            match stream {
+                Ok(stream) => net.recv_work.push(stream),
+                Err(e) => continue, // TODO handle this error
+            }
+        }
     }
 
-    pub fn authenticate_user(&self, username: String, password: String) {
+    fn receive_handler(net: Net) {
+        let mut size_buf: [u8; 4] = [0; 4]; // 32 bit message size field.
+
+        loop {
+            // Grab the connection stream to handle.
+            let mut stream = match net.recv_work.pop() {
+                Some(s) => s,
+                None    => continue,
+            };
+
+            // Read the message size.
+            stream.read_exact(&mut size_buf).unwrap();
+            let msg_size: u32 = unsafe { mem::transmute(size_buf) };
+
+            // Read the raw message bytes.
+            let mut msg_buf: Vec<u8> = Vec::with_capacity(msg_size as usize);
+            stream.read_exact(msg_buf.as_mut_slice()).unwrap();
+
+            // Create the message from the raw bytes.
+            let message: Message = json::decode(str::from_utf8(&msg_buf).unwrap()).unwrap();
+        }
+    }
+
+    fn sender(net: Net) {
+        let mut socket = UdpSocket::bind("127.0.0.1:0").expect("Couldn't bind socket!");
+        socket.set_read_timeout(Some(Duration::from_millis(1000)))
+            .expect("Couldn't set socket timeout!");
+        let mut element: Option<MessageContainer> = None;
+
+        loop {
+            // grab message from queue
+            let (mut msg, callback) = match net.send_work.pop() {
+                Some(MessageContainer{msg: m, callback: c}) => (m, c),
+                None => continue,
+            };
+
+            // send message off
+            let mut buffer = [0; 4096];
+            let dest = msg.route.pop().unwrap();
+            'send: loop {
+                socket.send_to(json::encode(&msg).unwrap().as_bytes(), dest.as_str())
+                    .expect("Couldn't send data!");
+
+                let mut resp_msg_size: usize;
+                'recv: loop {
+                    match socket.recv_from(&mut buffer) {
+                        Ok((resp_size, resp_src)) => {
+                            // remove when more advanced sender authentication is used
+                            if resp_src != dest.parse().unwrap() { continue 'recv; } 
+                            resp_msg_size = resp_size;
+                            break 'recv;
+                        },
+                        _  => continue 'send,
+                    }
+                }
+                
+                // TODO: add error handling
+                let res_msg: Message = json::decode(
+                    str::from_utf8(&buffer[..resp_msg_size]).unwrap()).unwrap();
+
+            }
+        }
+    }
+
+    /*pub fn authenticate_user(&self, username: String, password: String) {
         let (sender, receiver) = channel::<Message>();
         let &(ref queue, ref cvar) = &*self.work;
         
@@ -147,15 +169,15 @@ impl Net {
         let received = receiver.recv().unwrap();
 
         // now do stuff with what was received.
-    }
+    }*/
 
-    pub fn send(&self, user: User) {//message: Message) {
+    /*pub fn send(&self, user: User) {//message: Message) {
         let &(ref queue, ref cvar) = &*self.work;
         {
             let mut queue = queue.lock().unwrap();
             //queue.push_back(MessageContainer{msg: message, callback: None});
         }
         cvar.notify_one();
-    }
+    }*/
 
 }
