@@ -8,48 +8,35 @@ extern crate rustc_serialize;
 use std::net::{UdpSocket, SocketAddr};
 use std::thread;
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc::{channel};
+use std::sync::mpsc::{channel, Sender};
 
 mod io_lib;
 mod net_lib;
 mod mpmc_queue;
 mod state;
 
-static RECV_ADDR: &'static str = "127.0.0.1:5000";
-
 fn main() {
 
     let net = net_lib::Net::new();
     let io_handle = io_lib::IOHandler::new();
+
+    /*let mut input_queue: Arc<MpmcQueue<(String, Sender<bool>)>> = Arc::new(MpmcQueue::new());
+
+    for _ in 0..4 {
+        let queue = input_queue.clone();
+        thread::spawn(move|| { input_handler(queue); });
+    }
    
-    // to sender
-    let (recv_handler_to_sender, sender_receive) = channel::<String>();
-    let input_handler_to_sender = recv_handler_to_sender.clone();
-
-    // to output
-    let (recv_handler_to_output, output_receive) = channel::<String>();
-    let input_handler_to_output = recv_handler_to_output.clone();
-
-    thread::Builder::new().name("output".to_string()).spawn(move || {
-
-    }).unwrap();
-
     let input = thread::Builder::new().name("input".to_string()).spawn(move || {
-        let (input_done, input_recv) = channel::<i32>();
+        let (input_done, input_recv) = channel::<bool>();
 
         loop {
-            // move these three into a stuct for easy passing.
-            let senders = io_lib::InputHandlerSenders {
-                input  : input_done.clone(),
-                output : input_handler_to_output.clone(),
-                sender : input_handler_to_sender.clone()
-            };
             
-            let mut input = String::new();
-            io_handle.read_prompted_line(&mut input, "> ");
+            //let mut input = io_handle.get_line();
 
+            let done = input_done.clone();
             thread::spawn(move || {
-                handle_user_input(&input, &senders);
+                //handle_user_input(io_handle.get_line(), done);
             });
 
             // blocks until the handler thread is done taking additional user input.
@@ -58,16 +45,20 @@ fn main() {
         }
     }).unwrap();
 
-    let done = input.join();
-
+    //let done = input.join();*/
+    
 }
 
-fn handle_user_input(data: &String, senders: &io_lib::InputHandlerSenders) {
+fn handle_user_input(data: String) {
     println!("user entered: {}", data); // Temporary.
-    senders.input.send(0).unwrap(); // Release input buffer back to input thread.
+    //senders.input.send(0).unwrap(); // Release input buffer back to input thread.
 }
 
+fn input_handler(queue: Arc<MpmcQueue<(String, Sender<bool>)>>) {
+    loop {
 
+    }
+}
 
 
 

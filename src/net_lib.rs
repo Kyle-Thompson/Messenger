@@ -105,7 +105,14 @@ impl Net {
             // Create the message from the raw bytes.
             let message: Message = json::decode(str::from_utf8(&msg_buf).unwrap()).unwrap();
 
-            // TODO: Handle message.
+            // Handle the message.
+            if message.route.is_empty() {
+                // This message is for us.
+                // TODO
+            } else {
+                // Forward the message along.
+                net.send_work.push(MessageContainer{msg: message, callback: None});
+            }
         }
     }
 
@@ -137,32 +144,6 @@ impl Net {
             // Send the message.
             stream.write(encoded_msg.as_bytes()).unwrap();
             
-/*
-            // send message off [deprecated]
-            let mut buffer = [0; 4096];
-            let dest = msg.route.pop().unwrap();
-            'send: loop {
-                //socket.send_to(json::encode(&msg).unwrap().as_bytes(), dest.as_str())
-                //    .expect("Couldn't send data!");
-
-                let mut resp_msg_size: usize;
-                'recv: loop {
-                    match socket.recv_from(&mut buffer) {
-                        Ok((resp_size, resp_src)) => {
-                            // remove when more advanced sender authentication is used
-                            if resp_src != dest.parse().unwrap() { continue 'recv; } 
-                            resp_msg_size = resp_size;
-                            break 'recv;
-                        },
-                        _  => continue 'send,
-                    }
-                }
-                
-                // TODO: add error handling
-                let res_msg: Message = json::decode(
-                    str::from_utf8(&buffer[..resp_msg_size]).unwrap()).unwrap();
-
-            } */
         }
     }
 

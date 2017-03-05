@@ -5,3 +5,4 @@ authors = ["Kyle Thompson <kyle.thompson228@gmail.com>"]
 
 [dependencies]
 rustc-serialize = "0.3"
+ncurses = "5.85.0"
