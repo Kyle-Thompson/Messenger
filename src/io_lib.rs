@@ -3,8 +3,8 @@ use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Sender};
 
-extern crate ncurses;
-use self::ncurses::*;
+//extern crate ncurses;
+//use self::ncurses::*;
 
 struct Prompt {
     prompt: String,
@@ -30,14 +30,14 @@ pub struct IOHandler {
 
 impl IOHandler {
     pub fn new() -> IOHandler {
-        //println!("Welcome to SecMsg! Enter '/help' to get help or '/login' to get started.");
-        //io::stdout().flush().expect("Could not flush buffer.");
+        println!("Welcome to SecMsg! Enter '/help' to get help or '/login' to get started.");
+        io::stdout().flush().expect("Could not flush buffer.");
 
-        initscr();
-        raw();
+        //initscr();
+        //raw();
 
-        printw("Welcome to SecMsg! Enter '/help' to get help or '/login' to get started.");
-        refresh();
+        //printw("Welcome to SecMsg! Enter '/help' to get help or '/login' to get started.");
+        //refresh();
 
         IOHandler { 
             print_lock: Arc::new(Mutex::new(())),
@@ -50,7 +50,7 @@ impl IOHandler {
     }
 
     pub fn read_prompted_line(&self, mut string: &mut String) {
-        print!("{}", self.prompt.get_prompt());
+        print!("{}", self.prompt.lock().unwrap().get_prompt());
         io::stdout().flush().expect("Could not flush buffer.");
         self.read_line(&mut string);
     }
@@ -62,7 +62,7 @@ impl IOHandler {
 
 impl Drop for IOHandler {
     fn drop(&mut self) {
-        endwin();
+        //endwin();
     }
 }
 
