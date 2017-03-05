@@ -5,20 +5,22 @@
 
 extern crate rustc_serialize;
 
-use std::net::{UdpSocket, SocketAddr};
-use std::thread;
-use std::sync::{Arc, Mutex};
-use std::sync::mpsc::{channel, Sender};
+//use std::net::{UdpSocket, SocketAddr};
+//use std::thread;
+//use std::sync::{Arc, Mutex};
+//use std::sync::mpsc::{channel, Sender};
 
 mod io_lib;
 mod net_lib;
 mod mpmc_queue;
 mod state;
+mod control;
+
+use control::Control;
 
 fn main() {
 
-    let net = net_lib::Net::new();
-    let io_handle = io_lib::IOHandler::new();
+    Control::new().start();
 
     /*let mut input_queue: Arc<MpmcQueue<(String, Sender<bool>)>> = Arc::new(MpmcQueue::new());
 
@@ -48,21 +50,4 @@ fn main() {
     //let done = input.join();*/
     
 }
-
-fn handle_user_input(data: String) {
-    println!("user entered: {}", data); // Temporary.
-    //senders.input.send(0).unwrap(); // Release input buffer back to input thread.
-}
-
-fn input_handler(queue: Arc<MpmcQueue<(String, Sender<bool>)>>) {
-    loop {
-
-    }
-}
-
-
-
-
-
-
 
