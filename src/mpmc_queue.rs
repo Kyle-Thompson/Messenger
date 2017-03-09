@@ -14,11 +14,16 @@ impl<T> MpmcQueue<T> {
         }
     }
 
-    pub fn pop(&self) -> Option<T> {
+    pub fn pop(&self) -> T {
         let &(ref queue, ref cvar) = &*self.data;
-        let mut queue = queue.lock().unwrap();
-        while queue.is_empty() { queue = cvar.wait(queue).unwrap(); }
-        queue.pop_front()
+        loop {
+            let mut queue = queue.lock().unwrap();
+            while queue.is_empty() { queue = cvar.wait(queue).unwrap(); }
+            
+            if let Some(element) = queue.pop_front() {
+                return element;
+            }
+        }
     }
 
     pub fn push(&self, element: T) {

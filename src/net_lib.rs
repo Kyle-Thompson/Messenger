@@ -17,12 +17,25 @@ use state::User as User;
 const SERVER_ADDR: &'static str = "159.203.57.173:5000";
 
 #[derive(RustcEncodable, RustcDecodable, PartialEq)]
-enum MessageType { // TODO: fill in later
-    Ack,
+pub struct TextMessage {
+    text: String,
+    sender: String,
+}
+
+#[derive(RustcEncodable, RustcDecodable, PartialEq)]
+enum MessageType {
     Authenticate {
         username: String,
-        password: String
+        password: String,
     },
+    GetUser {
+        handle: String,
+    }
+    Text {
+        // id
+        msg: TextMessage,
+    },
+    // File
 }
 
 #[derive(RustcEncodable, RustcDecodable)]
@@ -30,7 +43,6 @@ struct Message {
     msg_type: MessageType,
     route: Vec<String>,
     // signature
-    // id
 }
 
 struct MessageContainer {
@@ -42,6 +54,7 @@ struct MessageContainer {
 pub struct Net {
     send_work: Arc<MpmcQueue<MessageContainer>>,
     recv_work: Arc<MpmcQueue<TcpStream>>,
+    new_messages: Arc<MpmcQueue<TextMessage>>,
 }
 
 impl Net {
@@ -52,6 +65,7 @@ impl Net {
         let mut net = Net {
             send_work: Arc::new(MpmcQueue::new()),
             recv_work: Arc::new(MpmcQueue::new()),
+            new_messages: Arc::new(MpmcQueue::new()),
         };
         
         // Spawning all sender threads.
@@ -67,7 +81,7 @@ impl Net {
         // Spawning all receiver handler threads.
         for i in 0..16 {
             let recv_net = net.clone();
-            thread::spawn(move|| { Net::receive_handler(recv_net); });
+            thread::spawn(move|| { Net::receiver(recv_net); });
         }
 
         net
@@ -79,72 +93,90 @@ impl Net {
         for stream in server.incoming() {
             match stream {
                 Ok(stream) => net.recv_work.push(stream),
-                Err(e) => continue, // TODO handle this error
+                Err(e) => continue,
             }
         }
     }
 
-    fn receive_handler(net: Net) {
-        let mut size_buf: [u8; 4] = [0; 4]; // 32 bit message size field.
+    fn receiver(net: Net) {
 
         loop {
             // Grab the connection stream to handle.
-            let mut stream = match net.recv_work.pop() {
-                Some(s) => s,
-                None    => continue,
-            };
-
-            // Read the message size.
-            stream.read_exact(&mut size_buf).unwrap();
-            let msg_size: u32 = unsafe { mem::transmute(size_buf) };
-
-            // Read the raw message bytes.
-            let mut msg_buf: Vec<u8> = Vec::with_capacity(msg_size as usize);
-            stream.read_exact(msg_buf.as_mut_slice()).unwrap();
-
-            // Create the message from the raw bytes.
-            let message: Message = json::decode(str::from_utf8(&msg_buf).unwrap()).unwrap();
-
+            let message: Message = Net::receive_message(&mut net.recv_work.pop());
+            
             // Handle the message.
-            if message.route.is_empty() {
-                // This message is for us.
-                // TODO
-            } else {
-                // Forward the message along.
+            if message.route.is_empty() { // This message is for us.
+                match message.msg_type {
+                    MessageType::Text{msg} => net.new_messages.push(msg),
+                    _ => continue, // Can't be anything other than text yet.
+                }
+            } else { // Forward the message along.
                 net.send_work.push(MessageContainer{msg: message, callback: None});
             }
         }
     }
 
+    // TODO: Just to be safe, should this not maybe be an optional Message or maybe result?
+    fn receive_message(stream: &mut TcpStream) -> Message {
+
+        // Read the message size.
+        let mut size_buf: [u8; 4] = [0; 4]; // 32 bit message size field.
+        stream.read_exact(&mut size_buf).unwrap();
+        let msg_size: u32 = unsafe { mem::transmute(size_buf) };
+
+        // Read the raw message bytes.
+        let mut msg_buf: Vec<u8> = Vec::with_capacity(msg_size as usize);
+        stream.read_exact(msg_buf.as_mut_slice()).unwrap();
+
+        // Create the message from the raw bytes.
+        json::decode(str::from_utf8(&msg_buf).unwrap()).unwrap()
+    }
+
     fn sender(net: Net) {
-        //let mut stream = TcpStream::bind("127.0.0.1:0").expect("Couldn't bind socket!");
         let mut element: Option<MessageContainer> = None;
 
         loop {
             // Grab message from queue.
-            let (mut msg, callback) = match net.send_work.pop() {
-                Some(MessageContainer{msg: m, callback: c}) => (m, c),
-                None => continue,
-            };
-
-            // Connect to the destination.
-            let dest = msg.route.pop().unwrap();
-            let mut stream = TcpStream::connect(dest.as_str()).unwrap();
-
-            // Encode the message.
-            let encoded_msg: String = json::encode(&msg).unwrap();//.as_bytes();
-
-            // Send the message's size.
-            if encoded_msg.len() >= u32::max_value() as usize { continue; }
-            let msg_size: [u8; 4] = unsafe {
-                mem::transmute(encoded_msg.as_bytes().len() as u32)
-            };
-            stream.write(&msg_size).unwrap();
+            let MessageContainer{mut msg, callback} = net.send_work.pop(); 
 
             // Send the message.
-            stream.write(encoded_msg.as_bytes()).unwrap();
-            
+            // TODO: Do something with the error.
+            if let Err(e) = Net::send_message(&mut msg) { continue; } 
+
+            // TODO: Implement logic for accepting response if there will be one.
+            match msg.msg_type {
+                // TODO: find way to match on authenticate without needing to write out
+                //       the unnecessary username and password field. All we care about
+                //       here is that msg_type is of type Authenticate, we don't actually
+                //       use it.
+                MessageType::Authenticate{username, password} => continue,
+                _ => continue,
+            };
         }
+    }
+
+    fn send_message(msg: &mut Message) -> Result<(), &'static str> {
+    
+        // Connect to the destination.
+        let dest = msg.route.pop().unwrap();
+        let mut stream = TcpStream::connect(dest.as_str()).unwrap();
+
+        // Encode the message.
+        let encoded_msg: String = json::encode(msg).unwrap();
+
+        // Send the message's size.
+        if encoded_msg.len() >= u32::max_value() as usize {
+            return Err("Message is too long."); 
+        }
+        let msg_size: [u8; 4] = unsafe {
+            mem::transmute(encoded_msg.as_bytes().len() as u32)
+        };
+        stream.write(&msg_size).unwrap();
+
+        // Send the message.
+        stream.write(encoded_msg.as_bytes()).unwrap();
+
+        Ok(())
     }
 
     /*pub fn authenticate_user(&self, username: String, password: String) {
@@ -178,5 +210,9 @@ impl Net {
         }
         cvar.notify_one();
     }*/
+
+    pub fn get_new_message(&self) -> TextMessage {
+        self.new_messages.pop()
+    }
 
 }
