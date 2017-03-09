@@ -11,7 +11,6 @@ use std::mem;
 use rustc_serialize::json;
 
 use mpmc_queue::MpmcQueue as MpmcQueue;
-use state::State as State;
 use state::User as User;
 
 const SERVER_ADDR: &'static str = "159.203.57.173:5000";
@@ -30,7 +29,7 @@ enum MessageType {
     },
     GetUser {
         handle: String,
-    }
+    },
     Text {
         // id
         msg: TextMessage,

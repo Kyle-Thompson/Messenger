@@ -6,6 +6,7 @@ use std::sync::mpsc::{channel, Sender};
 //extern crate ncurses;
 //use self::ncurses::*;
 
+/*
 struct Prompt {
     prompt: String,
 }
@@ -21,11 +22,11 @@ impl Prompt {
     pub fn get_prompt(&self) -> &str {
         &self.prompt
     }
-}
+}*/
 
 pub struct IOHandler {
-    print_lock: Arc<(Mutex<()>)>,
-    prompt: Arc<(Mutex<Prompt>)>,
+    //print_lock: Arc<(Mutex<()>)>,
+    //prompt: Arc<(Mutex<Prompt>)>,
 }
 
 impl IOHandler {
@@ -40,8 +41,8 @@ impl IOHandler {
         //refresh();
 
         IOHandler { 
-            print_lock: Arc::new(Mutex::new(())),
-            prompt: Arc::new(Mutex::new(Prompt::new())),
+            //print_lock: Arc::new(Mutex::new(())),
+            //prompt: Arc::new(Mutex::new(Prompt::new())),
         }
     }
 
@@ -50,7 +51,8 @@ impl IOHandler {
     }
 
     pub fn read_prompted_line(&self, mut string: &mut String) {
-        print!("{}", self.prompt.lock().unwrap().get_prompt());
+        print!("> ");
+        //print!("{}", self.prompt.lock().unwrap().get_prompt());
         io::stdout().flush().expect("Could not flush buffer.");
         self.read_line(&mut string);
     }
