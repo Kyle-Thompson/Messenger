@@ -5,49 +5,69 @@
 
 extern crate rustc_serialize;
 
-//use std::net::{UdpSocket, SocketAddr};
-//use std::thread;
-//use std::sync::{Arc, Mutex};
-//use std::sync::mpsc::{channel, Sender};
+use std::thread;
+use std::sync::{Arc, Mutex, Condvar};
 
 mod io_lib;
 mod net_lib;
 mod mpmc_queue;
 mod state;
-mod control;
 
-use control::Control;
+use net_lib::Net;
+use net_lib::TextMessage;
+use io_lib::IOHandler;
+use state::State;
 
 fn main() {
 
-    Control::new().start();
+    let net = Arc::new(Net::new());
+    let io = Arc::new(IOHandler::new());
+    let state = Arc::new((Mutex::new(State::new()), Condvar::new()));
 
-    /*let mut input_queue: Arc<MpmcQueue<(String, Sender<bool>)>> = Arc::new(MpmcQueue::new());
-
-    for _ in 0..4 {
-        let queue = input_queue.clone();
-        thread::spawn(move|| { input_handler(queue); });
-    }
-   
-    let input = thread::Builder::new().name("input".to_string()).spawn(move || {
-        let (input_done, input_recv) = channel::<bool>();
-
-        loop {
-            
-            //let mut input = io_handle.get_line();
-
-            let done = input_done.clone();
-            thread::spawn(move || {
-                //handle_user_input(io_handle.get_line(), done);
-            });
-
-            // blocks until the handler thread is done taking additional user input.
-            // turn into a match to see if thread should end.
-            let _ = input_recv.recv().unwrap();
-        }
-    }).unwrap();
-
-    //let done = input.join();*/
     
+    { // Network receiver
+        let net = net.clone();
+        let state = state.clone();
+        thread::spawn(move|| { network_receiver(net, state); });
+    }
+
+    { // Display output
+        let io = io.clone();
+        let state = state.clone();
+        thread::spawn(move|| { display_output(io, state); });
+    }
+
+    { // Get user input
+        let io = io.clone();
+        let net = net.clone();
+        let state = state.clone();
+        thread::spawn(move|| {
+            handle_user_input(io, net, state);        
+        }).join().unwrap(); // Only returns when this thread finishes.
+    }
 }
+
+// Gets a TextMessage from the network and adds it to the new_messages queue in state.
+fn network_receiver(net: Arc<Net>, state: Arc<(Mutex<State>, Condvar)>) {
+    loop {
+        let msg: TextMessage = net.get_new_message();
+    }
+}
+
+fn display_output(io: Arc<IOHandler>, state: Arc<(Mutex<State>, Condvar)>) {
+    let &(ref mutex, ref cvar) = &*state;
+    loop {
+        let mut state = mutex.lock().unwrap();
+    }
+}
+
+fn handle_user_input(io: Arc<IOHandler>, net: Arc<Net>, state: Arc<(Mutex<State>, Condvar)>) {
+    let default_prompt: String = String::from("> ");
+    let mut line: String = String::from("");
+    
+    loop {
+        io.read_prompted_line(&mut line, &default_prompt);
+    }
+}
+
 

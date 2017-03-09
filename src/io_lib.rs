@@ -50,15 +50,22 @@ impl IOHandler {
         io::stdin().read_line(&mut string).expect("Failed to read user input.");
     }
 
-    pub fn read_prompted_line(&self, mut string: &mut String) {
-        print!("> ");
+    pub fn read_prompted_line(&self, mut string: &mut String, prompt: &String) {
+        print!("{}", prompt);
         //print!("{}", self.prompt.lock().unwrap().get_prompt());
         io::stdout().flush().expect("Could not flush buffer.");
         self.read_line(&mut string);
     }
 
     pub fn get_line(&self) -> String {
-        String::from("") // TODO
+        let mut line: String = String::from("");
+        self.read_line(&mut line);
+        line
+    }
+
+    pub fn print_new_message(&self, msg: String) {
+        println!("{}", msg);
+        io::stdout().flush().expect("Could not flush buffer.");
     }
 }
 
