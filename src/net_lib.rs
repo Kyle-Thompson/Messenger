@@ -10,15 +10,16 @@ use std::mem;
 
 use rustc_serialize::json;
 
-use mpmc_queue::MpmcQueue as MpmcQueue;
-use state::User as User;
+use mpmc_queue::MpmcQueue;
+use state::User;
 
 const SERVER_ADDR: &'static str = "159.203.57.173:5000";
 
-#[derive(RustcEncodable, RustcDecodable, PartialEq)]
+#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq)]
 pub struct TextMessage {
-    text: String,
-    sender: String,
+    pub text: String,
+    pub sender: User,
+    pub conv_id: String,
 }
 
 #[derive(RustcEncodable, RustcDecodable, PartialEq)]
@@ -31,7 +32,6 @@ enum MessageType {
         handle: String,
     },
     Text {
-        // id
         msg: TextMessage,
     },
     // File

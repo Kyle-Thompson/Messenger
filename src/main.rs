@@ -22,12 +22,12 @@ fn main() {
 
     let net = Arc::new(Net::new());
     let io = Arc::new(IOHandler::new());
-    let state = Arc::new((Mutex::new(State::new()), Condvar::new()));
+    let state = Arc::new(State::new());
 
     
     { // Network receiver
         let net = net.clone();
-        let state = state.clone();
+        let mut state = state.clone();
         thread::spawn(move|| { network_receiver(net, state); });
     }
 
@@ -48,20 +48,19 @@ fn main() {
 }
 
 // Gets a TextMessage from the network and adds it to the new_messages queue in state.
-fn network_receiver(net: Arc<Net>, state: Arc<(Mutex<State>, Condvar)>) {
+fn network_receiver(net: Arc<Net>, state: Arc<State>) {
     loop {
-        let msg: TextMessage = net.get_new_message();
+        state.add_new_message(net.get_new_message());
     }
 }
 
-fn display_output(io: Arc<IOHandler>, state: Arc<(Mutex<State>, Condvar)>) {
-    let &(ref mutex, ref cvar) = &*state;
+fn display_output(io: Arc<IOHandler>, state: Arc<State>) {
     loop {
-        let mut state = mutex.lock().unwrap();
+
     }
 }
 
-fn handle_user_input(io: Arc<IOHandler>, net: Arc<Net>, state: Arc<(Mutex<State>, Condvar)>) {
+fn handle_user_input(io: Arc<IOHandler>, net: Arc<Net>, state: Arc<State>) {
     let default_prompt: String = String::from("> ");
     let mut line: String = String::from("");
     
