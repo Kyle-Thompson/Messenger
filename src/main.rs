@@ -24,7 +24,6 @@ fn main() {
     let io = Arc::new(IOHandler::new());
     let state = Arc::new(State::new());
 
-    
     { // Network receiver
         let net = net.clone();
         let mut state = state.clone();
@@ -68,5 +67,4 @@ fn handle_user_input(io: Arc<IOHandler>, net: Arc<Net>, state: Arc<State>) {
         io.read_prompted_line(&mut line, &default_prompt);
     }
 }
-
 
