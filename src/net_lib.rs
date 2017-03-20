@@ -7,6 +7,7 @@ use std::time::Duration;
 use std::io::{Read, Write};
 use std::str;
 use std::mem;
+use std::fmt;
 
 use rustc_serialize::json;
 
@@ -20,6 +21,12 @@ pub struct TextMessage {
     pub text: String,
     pub sender: User,
     pub conv_id: String,
+}
+
+impl fmt::Display for TextMessage {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}: {}", self.sender.handle, self.text)
+    }
 }
 
 #[derive(RustcEncodable, RustcDecodable, PartialEq)]

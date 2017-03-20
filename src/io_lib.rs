@@ -5,6 +5,7 @@ use std::sync::mpsc::{channel, Sender};
 
 //extern crate ncurses;
 //use self::ncurses::*;
+use net_lib::TextMessage;
 
 /*
 struct Prompt {
@@ -63,7 +64,7 @@ impl IOHandler {
         line
     }
 
-    pub fn print_new_message(&self, msg: String) {
+    pub fn print_new_message(&self, msg: TextMessage) {
         println!("{}", msg);
         io::stdout().flush().expect("Could not flush buffer.");
     }

@@ -1,20 +1,23 @@
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::mpsc::{channel, Sender, Receiver};
 use std::sync::{Arc, Mutex, Condvar};
 use std::clone::Clone;
 
 use net_lib::TextMessage;
+use mpmc_queue::MpmcQueue;
 
 #[derive(Clone, RustcEncodable, RustcDecodable, Hash, PartialEq, Eq)]
 pub struct User {
-    handle: String,
+    pub handle: String,
     addr: String,
     // public key
 }
 
+#[derive(PartialEq)]
 pub struct Conversation {
     //name: String, Implement when adding group messages
     partner: User, // Remove when adding group messages in favour of 'users'
-    messages: Vec<String>,
+    messages: Vec<TextMessage>,
     new_messages: VecDeque<TextMessage>,
     //users: map of all users in conversation. Implement when adding group messages.
 }
@@ -32,12 +35,24 @@ impl Conversation {
 
 type Conversations = HashMap<String, Conversation>;
 
+pub struct NewMessagesIter<'a> {
+    state: &'a State,
+}
+
+impl<'a> Iterator for NewMessagesIter<'a> {
+    type Item = TextMessage;
+
+    fn next(&mut self) -> Option<TextMessage> {
+        Some(self.state.channel.pop())
+    }
+}
+
 pub struct State {
-    //conversations: HashMap<User, Conversation>,
     conversations: Arc<(Mutex<Conversations>, Condvar)>,
-    current_conversation: Option<Conversation>,
-    known_users: HashSet<User>,
-    unseen_messages: u32,
+    current_conversation: Arc<Mutex<Option<String>>>,
+    //known_users: HashSet<User>,
+    unseen_message_count: Arc<Mutex<u32>>,
+    channel: Arc<MpmcQueue<TextMessage>>,
 }
 
 impl State {
@@ -45,18 +60,40 @@ impl State {
     pub fn new() -> State {
         State {
             conversations: Arc::new((Mutex::new(Conversations::new()), Condvar::new())),
-            current_conversation: None,
-            known_users: HashSet::new(),
-            unseen_messages: 0,
+            current_conversation: Arc::new(Mutex::new(None)),
+            //known_users: HashSet::new(),
+            unseen_message_count: Arc::new(Mutex::new(0)),
+            channel: Arc::new(MpmcQueue::new()),
         }
     }
 
     pub fn add_new_message(&self, msg: TextMessage) {
         let &(ref mutex, ref cvar) = &*self.conversations;
-        let ref mut conv: Conversations = *mutex.lock().unwrap();
-        let ref mut conv = conv.entry(msg.clone().conv_id).or_insert(Conversation::new(msg.clone().sender));
+        let convs: &mut Conversations = &mut *mutex.lock().unwrap();
+        let conv: &mut Conversation = convs.entry(msg.clone().conv_id)
+            .or_insert(Conversation::new(msg.clone().sender));
 
-        conv.new_messages.push_back(msg);
+        // TODO: Fix this garbage.
+        if let Some(ref s) = *self.current_conversation.lock().unwrap() {
+            if *s == msg.clone().conv_id {
+                self.channel.push(msg.clone());
+                conv.messages.push(msg);
+            } else {
+                conv.new_messages.push_back(msg);
+                *self.unseen_message_count.lock().unwrap() += 1;
+            }
+        } else {
+            conv.new_messages.push_back(msg);
+            *self.unseen_message_count.lock().unwrap() += 1;
+        }
+
         cvar.notify_one();
     }
+
+    pub fn get_new_messages(&self) -> NewMessagesIter {
+        NewMessagesIter {
+            state: self,
+        }
+    }
 }
+

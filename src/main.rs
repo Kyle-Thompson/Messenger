@@ -54,8 +54,8 @@ fn network_receiver(net: Arc<Net>, state: Arc<State>) {
 }
 
 fn display_output(io: Arc<IOHandler>, state: Arc<State>) {
-    loop {
-
+    for msg in state.get_new_messages() {
+        io.print_new_message(msg);
     }
 }
 
