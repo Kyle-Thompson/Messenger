@@ -13,6 +13,7 @@ use rustc_serialize::json;
 
 use mpmc_queue::MpmcQueue;
 use state::User;
+use state::Conversation;
 
 const SERVER_ADDR: &'static str = "159.203.57.173:5000";
 
@@ -161,7 +162,7 @@ impl Net {
         }
     }
 
-    fn send_message(msg: &mut Message) -> Result<(), &'static str> {
+    fn send_message(msg: &mut Message) -> Result<(), &str> {
     
         // Connect to the destination.
         let dest = msg.route.pop().unwrap();
@@ -185,6 +186,10 @@ impl Net {
         Ok(())
     }
 
+    pub fn send_text_message(&self, msg: &mut TextMessage, conv: &Conversation) {
+
+    }
+
     /*pub fn authenticate_user(&self, username: String, password: String) {
         let (sender, receiver) = channel::<Message>();
         let &(ref queue, ref cvar) = &*self.work;
@@ -206,15 +211,6 @@ impl Net {
         let received = receiver.recv().unwrap();
 
         // now do stuff with what was received.
-    }*/
-
-    /*pub fn send(&self, user: User) {//message: Message) {
-        let &(ref queue, ref cvar) = &*self.work;
-        {
-            let mut queue = queue.lock().unwrap();
-            //queue.push_back(MessageContainer{msg: message, callback: None});
-        }
-        cvar.notify_one();
     }*/
 
     pub fn get_new_message(&self) -> TextMessage {

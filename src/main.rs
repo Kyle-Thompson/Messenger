@@ -60,11 +60,21 @@ fn display_output(io: Arc<IOHandler>, state: Arc<State>) {
 }
 
 fn handle_user_input(io: Arc<IOHandler>, net: Arc<Net>, state: Arc<State>) {
+    let is_command = |s: &str| {
+        s.chars().nth(0).unwrap() == '/'
+    };
+
     let default_prompt: String = String::from("> ");
     let mut line: String = String::from("");
     
     loop {
         io.read_prompted_line(&mut line, &default_prompt);
+
+        if is_command(&line) {
+            // Handle the command.
+        } else {
+            // Print the user's message to the chat.
+        }
     }
 }
 
