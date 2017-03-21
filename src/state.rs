@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::sync::{Arc, Mutex, Condvar};
 use std::clone::Clone;
+use std::borrow::Borrow;
 
 use net_lib::TextMessage;
 use mpmc_queue::MpmcQueue;
@@ -33,7 +34,7 @@ impl Conversation {
     }
 }
 
-type Conversations = HashMap<String, Conversation>;
+type Conversations = HashMap<u64, Conversation>;
 
 pub struct NewMessagesIter<'a> {
     state: &'a State,
@@ -49,7 +50,7 @@ impl<'a> Iterator for NewMessagesIter<'a> {
 
 pub struct State {
     conversations: Arc<(Mutex<Conversations>, Condvar)>,
-    current_conversation: Arc<Mutex<Option<String>>>,
+    current_conversation: Arc<Mutex<Option<u64>>>,
     //known_users: HashSet<User>,
     unseen_message_count: Arc<Mutex<u32>>,
     channel: Arc<MpmcQueue<TextMessage>>,
@@ -92,7 +93,20 @@ impl State {
 
     pub fn get_new_messages(&self) -> NewMessagesIter {
         NewMessagesIter {
-            state: self,
+            state: &self,
+        }
+    }
+
+    pub fn get_current_conversation<'a>(&self) -> Option<&'a Conversation> {
+        let &(ref mutex, ref condvar) = &*self.conversations;
+        let ref a: Option<u64> = *self.current_conversation.lock().unwrap();
+        let ref b: &'a HashMap<u64, Conversation> = &*mutex.lock().unwrap();
+        match *a {
+            Some(ref c) => {
+                let temp = b.get(c);
+                temp.clone()
+            },
+            None        => None,
         }
     }
 }

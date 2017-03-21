@@ -21,7 +21,7 @@ const SERVER_ADDR: &'static str = "159.203.57.173:5000";
 pub struct TextMessage {
     pub text: String,
     pub sender: User,
-    pub conv_id: String,
+    pub conv_id: u64,
 }
 
 impl fmt::Display for TextMessage {

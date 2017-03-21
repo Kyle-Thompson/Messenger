@@ -4,6 +4,7 @@
 #![allow(unused_imports)]
 
 extern crate rustc_serialize;
+extern crate crossbeam;
 
 use std::thread;
 use std::sync::{Arc, Mutex, Condvar};
@@ -20,46 +21,43 @@ use state::State;
 
 fn main() {
 
-    let net = Arc::new(Net::new());
-    let io = Arc::new(IOHandler::new());
-    let state = Arc::new(State::new());
+    let net = Net::new();
+    let io = IOHandler::new();
+    let state = State::new();
 
-    { // Network receiver
-        let net = net.clone();
-        let mut state = state.clone();
-        thread::spawn(move|| { network_receiver(net, state); });
-    }
+    crossbeam::scope(|scope| {
+        scope.spawn(|| {
+            network_receiver(&net, &state);
+        });
+    });
 
-    { // Display output
-        let io = io.clone();
-        let state = state.clone();
-        thread::spawn(move|| { display_output(io, state); });
-    }
-
-    { // Get user input
-        let io = io.clone();
-        let net = net.clone();
-        let state = state.clone();
-        thread::spawn(move|| {
-            handle_user_input(io, net, state);        
-        }).join().unwrap(); // Only returns when this thread finishes.
-    }
+    crossbeam::scope(|scope| {
+        scope.spawn(|| {
+            display_output(&io, &state);
+        });
+    });
+    
+    crossbeam::scope(|scope| {
+        scope.spawn(|| {
+            handle_user_input(&io, &net, &state);
+        });
+    });
 }
 
 // Gets a TextMessage from the network and adds it to the new_messages queue in state.
-fn network_receiver(net: Arc<Net>, state: Arc<State>) {
+fn network_receiver(net: &Net, state: &State) {
     loop {
         state.add_new_message(net.get_new_message());
     }
 }
 
-fn display_output(io: Arc<IOHandler>, state: Arc<State>) {
+fn display_output(io: &IOHandler, state: &State) {
     for msg in state.get_new_messages() {
         io.print_new_message(msg);
     }
 }
 
-fn handle_user_input(io: Arc<IOHandler>, net: Arc<Net>, state: Arc<State>) {
+fn handle_user_input(io: &IOHandler, net: &Net, state: &State) {
     let is_command = |s: &str| {
         s.chars().nth(0).unwrap() == '/'
     };
@@ -73,6 +71,8 @@ fn handle_user_input(io: Arc<IOHandler>, net: Arc<Net>, state: Arc<State>) {
         if is_command(&line) {
             // Handle the command.
         } else {
+            // Send the message off to the network.
+            
             // Print the user's message to the chat.
         }
     }
