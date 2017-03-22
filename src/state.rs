@@ -4,6 +4,9 @@ use std::sync::{Arc, Mutex, Condvar};
 use std::clone::Clone;
 use std::borrow::Borrow;
 
+extern crate rand;
+use rand::Rng;
+
 use net_lib::TextMessage;
 use mpmc_queue::MpmcQueue;
 
@@ -14,12 +17,13 @@ pub struct User {
     // public key
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Conversation {
     //name: String, Implement when adding group messages
     partner: User, // Remove when adding group messages in favour of 'users'
     messages: Vec<TextMessage>,
     new_messages: VecDeque<TextMessage>,
+    id: u64,
     //users: map of all users in conversation. Implement when adding group messages.
 }
 
@@ -30,7 +34,12 @@ impl Conversation {
             partner: user,
             messages: Vec::new(),
             new_messages: VecDeque::new(),
+            id: rand::random::<u64>(),
         }
+    }
+
+    pub fn get_id(&self) -> u64 {
+        self.id
     }
 }
 
@@ -96,18 +105,11 @@ impl State {
             state: &self,
         }
     }
-
-    pub fn get_current_conversation<'a>(&self) -> Option<&'a Conversation> {
-        let &(ref mutex, ref condvar) = &*self.conversations;
-        let ref a: Option<u64> = *self.current_conversation.lock().unwrap();
-        let ref b: &'a HashMap<u64, Conversation> = &*mutex.lock().unwrap();
-        match *a {
-            Some(ref c) => {
-                let temp = b.get(c);
-                temp.clone()
-            },
-            None        => None,
-        }
+    
+    pub fn get_current_conversation(&self) -> Option<Conversation> {
+        self.current_conversation.lock().unwrap().and_then(|u| {
+            self.conversations.0.lock().unwrap().get(&u).map(|x| x.clone())
+        })
     }
 }
 

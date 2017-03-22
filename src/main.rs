@@ -5,6 +5,7 @@
 
 extern crate rustc_serialize;
 extern crate crossbeam;
+extern crate rand;
 
 use std::thread;
 use std::sync::{Arc, Mutex, Condvar};
@@ -18,6 +19,9 @@ use net_lib::Net;
 use net_lib::TextMessage;
 use io_lib::IOHandler;
 use state::State;
+use state::User;
+
+static USER: Option<User> = None;
 
 fn main() {
 
@@ -62,18 +66,38 @@ fn handle_user_input(io: &IOHandler, net: &Net, state: &State) {
         s.chars().nth(0).unwrap() == '/'
     };
 
-    let default_prompt: String = String::from("> ");
-    let mut line: String = String::from("");
+    let handle_command = |cmd: &str, args: Vec<&str>| {
+
+    };
     
     loop {
-        io.read_prompted_line(&mut line, &default_prompt);
+        let mut line: String = String::from("");
+        io.read_prompted_line(&mut line, "> ");
 
         if is_command(&line) {
-            // Handle the command.
+            let mut iter = line.split_terminator(' ');
+            handle_command(iter.next().unwrap(), iter.collect());
+
         } else {
-            // Send the message off to the network.
+            let curr_conv = state.get_current_conversation();
+
+            if curr_conv.is_none() {
             
-            // Print the user's message to the chat.
+            } else if USER.is_none() {
+
+            } else {
+                let tm = TextMessage {
+                    text: line,
+                    sender: USER.clone().unwrap(),
+                    conv_id: curr_conv.as_ref().unwrap().get_id(),
+                };
+                
+                // Send the message off to the network.
+                net.send_text_message(&tm, &curr_conv.unwrap());
+                
+                // Print the user's message to the chat.
+                state.add_new_message(tm);
+            }
         }
     }
 }

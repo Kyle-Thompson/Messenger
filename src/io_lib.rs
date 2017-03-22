@@ -51,7 +51,7 @@ impl IOHandler {
         io::stdin().read_line(&mut string).expect("Failed to read user input.");
     }
 
-    pub fn read_prompted_line(&self, mut string: &mut String, prompt: &String) {
+    pub fn read_prompted_line(&self, mut string: &mut String, prompt: &str) {
         print!("{}", prompt);
         //print!("{}", self.prompt.lock().unwrap().get_prompt());
         io::stdout().flush().expect("Could not flush buffer.");

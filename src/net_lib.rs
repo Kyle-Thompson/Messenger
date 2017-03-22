@@ -186,7 +186,7 @@ impl Net {
         Ok(())
     }
 
-    pub fn send_text_message(&self, msg: &mut TextMessage, conv: &Conversation) {
+    pub fn send_text_message(&self, msg: &TextMessage, conv: &Conversation) {
 
     }
 
