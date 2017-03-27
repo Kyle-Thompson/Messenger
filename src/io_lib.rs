@@ -68,6 +68,11 @@ impl IOHandler {
         println!("{}", msg);
         io::stdout().flush().expect("Could not flush buffer.");
     }
+    
+    pub fn print_error(&self, err: &'static str) {
+        println!("{}", err);
+        io::stdout().flush().expect("Could not flush buffer.");
+    }
 }
 
 impl Drop for IOHandler {

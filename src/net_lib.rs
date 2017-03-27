@@ -32,7 +32,11 @@ impl fmt::Display for TextMessage {
 
 #[derive(RustcEncodable, RustcDecodable, PartialEq)]
 enum MessageType {
-    Authenticate {
+    Login {
+        username: String,
+        password: String,
+    },
+    Register {
         username: String,
         password: String,
     },
@@ -74,21 +78,21 @@ impl Net {
             recv_work: Arc::new(MpmcQueue::new()),
             new_messages: Arc::new(MpmcQueue::new()),
         };
-        
-        // Spawning all sender threads.
-        for i in 0..16 {
-            let send_net = net.clone();
-            thread::spawn(move|| { Net::sender(send_net); });
-        }
        
         // Spawn main receiver.
         let recv_net = net.clone();
         thread::spawn(move|| { Net::main_receiver(recv_net); });
 
-        // Spawning all receiver handler threads.
-        for i in 0..16 {
+        // Spawning all receiver threads.
+        for i in 0..4 {
             let recv_net = net.clone();
             thread::spawn(move|| { Net::receiver(recv_net); });
+        }
+        
+        // Spawning all sender threads.
+        for i in 0..4 {
+            let send_net = net.clone();
+            thread::spawn(move|| { Net::sender(send_net); });
         }
 
         net
@@ -145,28 +149,23 @@ impl Net {
         loop {
             // Grab message from queue.
             let MessageContainer{mut msg, callback} = net.send_work.pop(); 
+            
+            // Connect to the destination.
+            let dest = msg.route.pop().unwrap();
+            let mut stream = TcpStream::connect(dest.as_str()).unwrap();
 
             // Send the message.
             // TODO: Do something with the error.
-            if let Err(e) = Net::send_message(&mut msg) { continue; } 
+            if let Err(e) = Net::send_message(&mut stream, &mut msg) { continue; } 
 
-            // TODO: Implement logic for accepting response if there will be one.
-            match msg.msg_type {
-                // TODO: find way to match on authenticate without needing to write out
-                //       the unnecessary username and password field. All we care about
-                //       here is that msg_type is of type Authenticate, we don't actually
-                //       use it.
-                MessageType::Authenticate{username, password} => continue,
-                _ => continue,
-            };
+            // Get the response message if there will be one.
+            if let Some(callback) = callback {
+                callback.send(Net::receive_message(&mut stream)).unwrap();
+            }
         }
     }
 
-    fn send_message(msg: &mut Message) -> Result<(), &str> {
-    
-        // Connect to the destination.
-        let dest = msg.route.pop().unwrap();
-        let mut stream = TcpStream::connect(dest.as_str()).unwrap();
+    fn send_message(stream: &mut TcpStream, msg: &mut Message) -> Result<(), &'static str> {
 
         // Encode the message.
         let encoded_msg: String = json::encode(msg).unwrap();
@@ -190,28 +189,41 @@ impl Net {
 
     }
 
-    /*pub fn authenticate_user(&self, username: String, password: String) {
+    pub fn login(&self, username: &String, password: &String) -> Result<User, &'static str> {
         let (sender, receiver) = channel::<Message>();
-        let &(ref queue, ref cvar) = &*self.work;
-        
-        {
-            let mut queue = queue.lock().unwrap();
-            queue.push_back(MessageContainer{
-                msg: Message {
-                    msg_type: MessageType::Authenticate{
-                        username: username, password: password
-                    },
-                    route: vec![SERVER_ADDR.to_string()],
+        self.send_work.push(MessageContainer {
+            msg: Message {
+                msg_type: MessageType::Login {
+                    username: username.clone(),
+                    password: password.clone(),
                 },
-                callback: Some(sender),
-            });
-        }
-        cvar.notify_one();
+                route: vec![String::from(SERVER_ADDR)],
+            },
+            callback: Some(sender),
+        });
 
-        let received = receiver.recv().unwrap();
+        let response: Message = receiver.recv().unwrap();
 
-        // now do stuff with what was received.
-    }*/
+        Err("yolo")
+    }
+
+    pub fn register(&self, username: &String, password: &String) -> Result<User, &'static str> {
+        let (sender, receiver) = channel::<Message>();
+        self.send_work.push(MessageContainer {
+            msg: Message {
+                msg_type: MessageType::Register {
+                    username: username.clone(),
+                    password: password.clone(),
+                },
+                route: vec![String::from(SERVER_ADDR)],
+            },
+            callback: Some(sender),
+        });
+
+        let response: Message = receiver.recv().unwrap();
+
+        Err("yolo")
+    }
 
     pub fn get_new_message(&self) -> TextMessage {
         self.new_messages.pop()
