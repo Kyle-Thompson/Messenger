@@ -1,9 +1,8 @@
-use std::net::{UdpSocket, TcpListener, TcpStream, Ipv4Addr, SocketAddr};
-use std::thread::{self, JoinHandle};
-use std::collections::{VecDeque};
-use std::sync::{Arc, Mutex, Condvar};
-use std::sync::mpsc::{channel, Sender};
-use std::time::Duration;
+use std::net::{TcpListener, TcpStream};
+use std::thread::{self};
+use std::collections::{HashMap};
+use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{Sender};
 use std::io::{Read, Write};
 use std::str;
 use std::mem;
@@ -13,7 +12,6 @@ use rustc_serialize::json;
 
 use mpmc_queue::MpmcQueue;
 use state::User;
-use state::Conversation;
 
 const SERVER_ADDR: &'static str = "159.203.57.173:5000";
 
@@ -30,8 +28,8 @@ impl fmt::Display for TextMessage {
     }
 }
 
-#[derive(RustcEncodable, RustcDecodable, PartialEq)]
-enum MessageType {
+#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq)]
+pub enum MessageType {
     Login {
         username: String,
         password: String,
@@ -49,16 +47,35 @@ enum MessageType {
     // File
 }
 
-#[derive(RustcEncodable, RustcDecodable)]
-struct Message {
+#[derive(Clone, RustcEncodable, RustcDecodable)]
+pub struct Message {
     msg_type: MessageType,
     route: Vec<String>,
     // signature
 }
 
-struct MessageContainer {
+impl Message {
+    pub fn new(msg_type: MessageType, route: Vec<String>) -> Message {
+        Message {
+            msg_type: msg_type,
+            route: route,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct MessageContainer {
     msg: Message,
     callback: Option<Sender<Message>>,
+}
+
+impl MessageContainer {
+    pub fn new(msg: Message, callback: Option<Sender<Message>>) -> MessageContainer {
+        MessageContainer {
+            msg: msg,
+            callback: callback,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -66,6 +83,7 @@ pub struct Net {
     send_work: Arc<MpmcQueue<MessageContainer>>,
     recv_work: Arc<MpmcQueue<TcpStream>>,
     new_messages: Arc<MpmcQueue<TextMessage>>,
+    routes: Arc<Mutex<HashMap<u64, Vec<String>>>>,
 }
 
 impl Net {
@@ -77,20 +95,21 @@ impl Net {
             send_work: Arc::new(MpmcQueue::new()),
             recv_work: Arc::new(MpmcQueue::new()),
             new_messages: Arc::new(MpmcQueue::new()),
+            routes: Arc::new(Mutex::new(HashMap::new())),
         };
        
         // Spawn main receiver.
         let recv_net = net.clone();
-        thread::spawn(move|| { Net::main_receiver(recv_net); });
+        thread::spawn(move|| { Net::listener(recv_net); });
 
         // Spawning all receiver threads.
-        for i in 0..4 {
+        for _ in 0..4 {
             let recv_net = net.clone();
             thread::spawn(move|| { Net::receiver(recv_net); });
         }
         
         // Spawning all sender threads.
-        for i in 0..4 {
+        for _ in 0..4 {
             let send_net = net.clone();
             thread::spawn(move|| { Net::sender(send_net); });
         }
@@ -98,13 +117,13 @@ impl Net {
         net
     }
 
-    fn main_receiver(net: Net) {
+    fn listener(net: Net) {
         let server = TcpListener::bind("127.0.0.1:5000").unwrap();
 
         for stream in server.incoming() {
             match stream {
                 Ok(stream) => net.recv_work.push(stream),
-                Err(e) => continue,
+                Err(_) => continue,
             }
         }
     }
@@ -144,7 +163,7 @@ impl Net {
     }
 
     fn sender(net: Net) {
-        let mut element: Option<MessageContainer> = None;
+        //let mut element: Option<MessageContainer> = None;
 
         loop {
             // Grab message from queue.
@@ -156,7 +175,7 @@ impl Net {
 
             // Send the message.
             // TODO: Do something with the error.
-            if let Err(e) = Net::send_message(&mut stream, &mut msg) { continue; } 
+            if let Err(_) = Net::send_message(&mut stream, &mut msg) { continue; } 
 
             // Get the response message if there will be one.
             if let Some(callback) = callback {
@@ -184,49 +203,26 @@ impl Net {
 
         Ok(())
     }
-
-    pub fn send_text_message(&self, msg: &TextMessage, conv: &Conversation) {
-
-    }
-
-    pub fn login(&self, username: &String, password: &String) -> Result<User, &'static str> {
-        let (sender, receiver) = channel::<Message>();
-        self.send_work.push(MessageContainer {
-            msg: Message {
-                msg_type: MessageType::Login {
-                    username: username.clone(),
-                    password: password.clone(),
-                },
-                route: vec![String::from(SERVER_ADDR)],
-            },
-            callback: Some(sender),
-        });
-
-        let response: Message = receiver.recv().unwrap();
-
-        Err("yolo")
-    }
-
-    pub fn register(&self, username: &String, password: &String) -> Result<User, &'static str> {
-        let (sender, receiver) = channel::<Message>();
-        self.send_work.push(MessageContainer {
-            msg: Message {
-                msg_type: MessageType::Register {
-                    username: username.clone(),
-                    password: password.clone(),
-                },
-                route: vec![String::from(SERVER_ADDR)],
-            },
-            callback: Some(sender),
-        });
-
-        let response: Message = receiver.recv().unwrap();
-
-        Err("yolo")
-    }
-
-    pub fn get_new_message(&self) -> TextMessage {
+    
+    pub fn get_message(&self) -> TextMessage {
         self.new_messages.pop()
+    }
+
+    pub fn add_message(&self, msg: MessageContainer) {
+        self.send_work.push(msg);
+    }
+
+    pub fn get_route(&self, conv: u64, usr: &User) -> Vec<String> {
+        self.routes.lock().unwrap().entry(conv).or_insert(self.gen_route(&usr)).clone()
+    }
+
+    fn gen_route(&self, user: &User) -> Vec<String> {
+        // TODO
+        vec![user.addr.clone()]
+    }
+
+    pub fn server_addr() -> &'static str {
+        SERVER_ADDR
     }
 
 }

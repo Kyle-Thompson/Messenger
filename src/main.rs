@@ -1,14 +1,9 @@
 #![allow(unused_variables)]
-#![allow(dead_code)]
 #![allow(unused_mut)]
-#![allow(unused_imports)]
 
 extern crate rustc_serialize;
 extern crate crossbeam;
 extern crate rand;
-
-use std::thread;
-use std::sync::{Arc, Mutex, Condvar};
 
 mod io_lib;
 mod net_lib;
@@ -17,6 +12,9 @@ mod state;
 mod commands;
 
 use net_lib::Net;
+use net_lib::Message;
+use net_lib::MessageType;
+use net_lib::MessageContainer;
 use net_lib::TextMessage;
 use io_lib::IOHandler;
 use state::State;
@@ -52,7 +50,7 @@ fn main() {
 // Gets a TextMessage from the network and adds it to the new_messages queue in state.
 fn network_receiver(net: &Net, state: &State) {
     loop {
-        state.add_new_message(net.get_new_message());
+        state.add_new_message(net.get_message());
     }
 }
 
@@ -116,14 +114,23 @@ fn handle_user_input(io: &IOHandler, net: &Net, state: &State) {
             } else if user.is_none() {
 
             } else {
+                let conv_id = curr_conv.as_ref().unwrap().get_id(); 
                 let tm = TextMessage {
                     text: line,
                     sender: user.clone().unwrap(),
-                    conv_id: curr_conv.as_ref().unwrap().get_id(),
+                    conv_id: conv_id,
                 };
+
+                let mc = MessageContainer::new(
+                    Message::new(
+                        MessageType::Text{msg: tm.clone()}, 
+                        net.get_route(conv_id, curr_conv.as_ref().unwrap().get_partner())
+                    ),
+                    None
+                );
                 
                 // Send the message off to the network.
-                net.send_text_message(&tm, &curr_conv.unwrap());
+                net.add_message(mc);
                 
                 // Print the user's message to the chat.
                 state.add_new_message(tm);

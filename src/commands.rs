@@ -10,6 +10,7 @@ pub fn cmd_login(args: &Vec<&str>, io: &IOHandler, net: &Net) -> Result<User, &'
     let mut password: String = "".to_string();
     io.read_prompted_line(&mut username, "Username: ");
     io.read_prompted_line(&mut password, "Password: ");
+    let sup = Net::server_addr();
     Err("yolo")
 }
 

@@ -1,11 +1,8 @@
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::mpsc::{channel, Sender, Receiver};
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, Condvar};
 use std::clone::Clone;
-use std::borrow::Borrow;
 
 extern crate rand;
-use rand::Rng;
 
 use net_lib::TextMessage;
 use mpmc_queue::MpmcQueue;
@@ -13,7 +10,7 @@ use mpmc_queue::MpmcQueue;
 #[derive(Clone, RustcEncodable, RustcDecodable, Hash, PartialEq, Eq)]
 pub struct User {
     pub handle: String,
-    addr: String,
+    pub addr: String,
     // public key
 }
 
@@ -40,6 +37,10 @@ impl Conversation {
 
     pub fn get_id(&self) -> u64 {
         self.id
+    }
+
+    pub fn get_partner(&self) -> &User {
+        &self.partner
     }
 }
 

@@ -1,7 +1,4 @@
-use std::thread;
 use std::io::{self, Write};
-use std::sync::{Arc, Mutex};
-use std::sync::mpsc::{channel, Sender};
 
 //extern crate ncurses;
 //use self::ncurses::*;
@@ -56,12 +53,6 @@ impl IOHandler {
         //print!("{}", self.prompt.lock().unwrap().get_prompt());
         io::stdout().flush().expect("Could not flush buffer.");
         self.read_line(&mut string);
-    }
-
-    pub fn get_line(&self) -> String {
-        let mut line: String = String::from("");
-        self.read_line(&mut line);
-        line
     }
 
     pub fn print_new_message(&self, msg: TextMessage) {
