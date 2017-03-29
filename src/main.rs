@@ -9,7 +9,7 @@ mod io_lib;
 mod net_lib;
 mod mpmc_queue;
 mod state;
-mod commands;
+mod command;
 
 use net_lib::Net;
 use net_lib::Message;
@@ -19,8 +19,6 @@ use net_lib::TextMessage;
 use io_lib::IOHandler;
 use state::State;
 use state::User;
-use commands::*;
-
 
 fn main() {
 
@@ -65,46 +63,14 @@ fn handle_user_input(io: &IOHandler, net: &Net, state: &State) {
     let is_command = |s: &str| {
         s.chars().nth(0).unwrap() == '/'
     };
-
-    let mut handle_command = |user: &mut Option<User>, cmd: &str, args: Vec<&str>| {
-        match cmd {
-            "/login" => {
-                *user = match cmd_login(&args, &io, &net) {
-                    Ok(usr) => Some(usr),
-                    Err(e) => {
-                        io.print_error(e);
-                        None
-                    },
-                };
-            },
-            "/register" => {
-                *user = match cmd_register(&args, &io, &net) {
-                    Ok(usr) => Some(usr),
-                    Err(e) => {
-                        io.print_error(e);
-                        None
-                    },
-                };
-            },
-            "/connect" => {
-                if let Err(e) = cmd_connect(&args, &net, &state) {
-                    io.print_error(e);
-                }
-            },
-
-            _ => {
-                io.print_error("Command not recognized");
-            },
-        }
-    };
     
     loop {
         let mut line: String = String::from("");
         io.read_prompted_line(&mut line, "> ");
 
         if is_command(&line) {
-            let mut iter = line.split_terminator(' ');
-            handle_command(&mut user, iter.next().unwrap(), iter.collect());
+            let tokens: Vec<&str> = line.split_terminator(' ').collect();
+            command::handle(&io, &net, &state, &mut user, &*tokens);
 
         } else {
             let curr_conv = state.get_current_conversation();
