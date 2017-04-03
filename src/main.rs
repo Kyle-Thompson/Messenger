@@ -21,27 +21,20 @@ use state::State;
 use state::User;
 
 fn main() {
-
     let net = Net::new();
     let io = IOHandler::new();
     let state = State::new();
-
+        
     crossbeam::scope(|scope| {
         scope.spawn(|| {
             network_receiver(&net, &state);
         });
-    });
-
-    crossbeam::scope(|scope| {
+        
         scope.spawn(|| {
             display_output(&io, &state);
         });
-    });
-    
-    crossbeam::scope(|scope| {
-        scope.spawn(|| {
-            handle_user_input(&io, &net, &state);
-        });
+        
+        handle_user_input(&io, &net, &state);
     });
 }
 
@@ -54,7 +47,7 @@ fn network_receiver(net: &Net, state: &State) {
 
 fn display_output(io: &IOHandler, state: &State) {
     for msg in state.get_new_messages() {
-        io.print_new_message(msg);
+        io.print_message(msg);
     }
 }
 

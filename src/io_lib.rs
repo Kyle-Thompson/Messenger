@@ -1,47 +1,15 @@
 use std::io::{self, Write};
 
-//extern crate ncurses;
-//use self::ncurses::*;
 use net_lib::TextMessage;
 
-/*
-struct Prompt {
-    prompt: String,
-}
-
-impl Prompt {
-    
-    pub fn new() -> Prompt {
-        Prompt {
-            prompt: String::from("> "),
-        }
-    }
-
-    pub fn get_prompt(&self) -> &str {
-        &self.prompt
-    }
-}*/
-
-pub struct IOHandler {
-    //print_lock: Arc<(Mutex<()>)>,
-    //prompt: Arc<(Mutex<Prompt>)>,
-}
+pub struct IOHandler;
 
 impl IOHandler {
     pub fn new() -> IOHandler {
         println!("Welcome to SecMsg! Enter '/help' to get help or '/login' to get started.");
         io::stdout().flush().expect("Could not flush buffer.");
 
-        //initscr();
-        //raw();
-
-        //printw("Welcome to SecMsg! Enter '/help' to get help or '/login' to get started.");
-        //refresh();
-
-        IOHandler { 
-            //print_lock: Arc::new(Mutex::new(())),
-            //prompt: Arc::new(Mutex::new(Prompt::new())),
-        }
+        IOHandler { }
     }
 
     pub fn read_line(&self, mut string: &mut String) {
@@ -55,13 +23,18 @@ impl IOHandler {
         self.read_line(&mut string);
     }
 
-    pub fn print_new_message(&self, msg: TextMessage) {
-        println!("{}", msg);
+    pub fn print_message(&self, msg: TextMessage) {
+        println!("{}", msg.to_string());
+        io::stdout().flush().expect("Could not flush buffer.");
+    }
+
+    pub fn print_log(&self, text: &str) {
+        println!("{}", text);
         io::stdout().flush().expect("Could not flush buffer.");
     }
     
-    pub fn print_error(&self, err: &'static str) {
-        println!("{}", err);
+    pub fn print_error(&self, err: &str) {
+        println!("Error: {}", err);
         io::stdout().flush().expect("Could not flush buffer.");
     }
 }

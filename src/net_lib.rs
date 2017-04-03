@@ -6,7 +6,8 @@ use std::sync::mpsc::{Sender};
 use std::io::{Read, Write};
 use std::str;
 use std::mem;
-use std::fmt;
+//use std::fmt;
+use std::io;
 
 use rustc_serialize::json;
 
@@ -22,10 +23,17 @@ pub struct TextMessage {
     pub conv_id: u64,
 }
 
-impl fmt::Display for TextMessage {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}: {}", self.sender.handle, self.text)
+impl ToString for TextMessage {
+    fn to_string(&self) -> String {
+        format!("{}: {}", self.sender.handle, self.text)
     }
+}
+
+#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq)]
+pub enum ResponseType {
+    User (User),
+    Connection (Vec<String>),
+    Error (String)
 }
 
 #[derive(Clone, RustcEncodable, RustcDecodable, PartialEq)]
@@ -38,9 +46,8 @@ pub enum MessageType {
         username: String,
         password: String,
     },
-    GetUser {
-        handle: String,
-    },
+    GetUser (String),
+    Response (ResponseType),
     Text {
         msg: TextMessage,
     },
@@ -49,7 +56,7 @@ pub enum MessageType {
 
 #[derive(Clone, RustcEncodable, RustcDecodable)]
 pub struct Message {
-    msg_type: MessageType,
+    pub msg_type: MessageType,
     route: Vec<String>,
     // signature
 }
@@ -63,17 +70,19 @@ impl Message {
     }
 }
 
+type Response = Sender<Result<Option<Message>, String>>;
+
 #[derive(Clone)]
 pub struct MessageContainer {
     msg: Message,
-    callback: Option<Sender<Message>>,
+    response: Option<Response>,
 }
 
 impl MessageContainer {
-    pub fn new(msg: Message, callback: Option<Sender<Message>>) -> MessageContainer {
+    pub fn new(msg: Message, response: Option<Response>) -> MessageContainer {
         MessageContainer {
             msg: msg,
-            callback: callback,
+            response: response,
         }
     }
 }
@@ -141,7 +150,7 @@ impl Net {
                     _ => continue, // Can't be anything other than text yet.
                 }
             } else { // Forward the message along.
-                net.send_work.push(MessageContainer{msg: message, callback: None});
+                net.send_work.push(MessageContainer{msg: message, response: None});
             }
         }
     }
@@ -155,7 +164,9 @@ impl Net {
         let msg_size: u32 = unsafe { mem::transmute(size_buf) };
 
         // Read the raw message bytes.
-        let mut msg_buf: Vec<u8> = Vec::with_capacity(msg_size as usize);
+        //let mut msg_buf: Vec<u8> = Vec::with_capacity(msg_size as usize);
+        //unsafe { msg_buf.set_len(msg_size as usize) }
+        let mut msg_buf = vec![0; msg_size as usize];
         stream.read_exact(msg_buf.as_mut_slice()).unwrap();
 
         // Create the message from the raw bytes.
@@ -167,19 +178,34 @@ impl Net {
 
         loop {
             // Grab message from queue.
-            let MessageContainer{mut msg, callback} = net.send_work.pop(); 
+            let MessageContainer{mut msg, response} = net.send_work.pop(); 
             
             // Connect to the destination.
             let dest = msg.route.pop().unwrap();
-            let mut stream = TcpStream::connect(dest.as_str()).unwrap();
+            let mut stream = match TcpStream::connect(&dest) {
+                Ok(s) => s,
+                Err(_) => {
+                    if let Some(res) = response {
+                        res.send(Err("Could not connect to destination".to_string())).unwrap();
+                        // TODO: Let server know about the disconnected host.
+                    }
+                    continue;
+                }
+            };
+            println!("Connected");
+            io::stdout().flush().unwrap();
 
             // Send the message.
             // TODO: Do something with the error.
             if let Err(_) = Net::send_message(&mut stream, &mut msg) { continue; } 
 
             // Get the response message if there will be one.
-            if let Some(callback) = callback {
-                callback.send(Net::receive_message(&mut stream)).unwrap();
+            if let Some(res) = response {
+                if Net::needs_response(&msg.msg_type) {
+                    res.send(Ok(Some(Net::receive_message(&mut stream)))).unwrap();
+                } else {
+                    res.send(Ok(None)).unwrap();
+                }
             }
         }
     }
@@ -202,6 +228,14 @@ impl Net {
         stream.write(encoded_msg.as_bytes()).unwrap();
 
         Ok(())
+    }
+
+    fn needs_response(msg_type: &MessageType) -> bool {
+        match *msg_type {
+            MessageType::Login{ref username, ref password} => true,
+            MessageType::Register{ref username, ref password} => true,
+            _ => false,
+        }
     }
     
     pub fn get_message(&self) -> TextMessage {
