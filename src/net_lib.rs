@@ -1,12 +1,12 @@
 use std::net::{TcpListener, TcpStream};
 use std::thread::{self};
 use std::collections::{HashMap};
+use std::collections::hash_map::Entry;
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc::{Sender};
+use std::sync::mpsc::{channel, Sender};
 use std::io::{Read, Write};
 use std::str;
 use std::mem;
-//use std::fmt;
 use std::io;
 
 use rustc_serialize::json;
@@ -47,6 +47,7 @@ pub enum MessageType {
         password: String,
     },
     GetUser (String),
+    Connect (String),
     Response (ResponseType),
     Text {
         msg: TextMessage,
@@ -92,7 +93,7 @@ pub struct Net {
     send_work: Arc<MpmcQueue<MessageContainer>>,
     recv_work: Arc<MpmcQueue<TcpStream>>,
     new_messages: Arc<MpmcQueue<TextMessage>>,
-    routes: Arc<Mutex<HashMap<u64, Vec<String>>>>,
+    routes: Arc<Mutex<HashMap<String, Vec<String>>>>,
 }
 
 impl Net {
@@ -164,8 +165,6 @@ impl Net {
         let msg_size: u32 = unsafe { mem::transmute(size_buf) };
 
         // Read the raw message bytes.
-        //let mut msg_buf: Vec<u8> = Vec::with_capacity(msg_size as usize);
-        //unsafe { msg_buf.set_len(msg_size as usize) }
         let mut msg_buf = vec![0; msg_size as usize];
         stream.read_exact(msg_buf.as_mut_slice()).unwrap();
 
@@ -234,6 +233,7 @@ impl Net {
         match *msg_type {
             MessageType::Login{ref username, ref password} => true,
             MessageType::Register{ref username, ref password} => true,
+            MessageType::Connect(ref user) => true,
             _ => false,
         }
     }
@@ -246,13 +246,48 @@ impl Net {
         self.send_work.push(msg);
     }
 
-    pub fn get_route(&self, conv: u64, usr: &User) -> Vec<String> {
-        self.routes.lock().unwrap().entry(conv).or_insert(self.gen_route(&usr)).clone()
+    pub fn get_route(&self, name: &str) -> Result<Vec<String>, String> {
+        match self.routes.lock().unwrap().entry(name.to_string()) {
+            Entry::Occupied(o) => Ok(o.get().clone()),
+            Entry::Vacant(v) => {
+                match self.gen_route(name) {
+                    Ok(r) => {
+                        Ok(v.insert(r).clone())
+                    },
+                    Err(e) => Err(e.to_string())
+                }
+            }
+        }
     }
 
-    fn gen_route(&self, user: &User) -> Vec<String> {
-        // TODO
-        vec![user.addr.clone()]
+    fn gen_route(&self, user: &str) -> Result<Vec<String>, String> {
+        let (sender, receiver) = channel();
+        self.add_message(
+            MessageContainer::new(
+                Message::new(
+                    MessageType::Connect(user.to_string()),
+                    vec![SERVER_ADDR.to_string()]
+                ),
+                Some(sender)
+            )
+        );
+
+        let res = match receiver.recv().unwrap(){
+            Ok(r) => r.unwrap(),
+            Err(e) => {
+                return Err(e);
+            }
+        };
+
+        if let MessageType::Response(res) = res.msg_type {
+            match res {
+                ResponseType::Connection(route) => Ok(route),
+                ResponseType::Error(e) => Err(e),
+                _ => Err("Something went wrong".to_string())
+            }
+        } else {
+            Err("Reply was not of type 'Response'. Whut?".to_string())
+        }
     }
 
     pub fn server_addr() -> &'static str {

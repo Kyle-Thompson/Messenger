@@ -1,13 +1,8 @@
 use std::sync::mpsc::channel;
 
 use io_lib::IOHandler;
-use net_lib::MessageContainer;
-use net_lib::Message;
-use net_lib::MessageType;
-use net_lib::ResponseType;
-use net_lib::Net;
-use state::User;
-use state::State;
+use net_lib::*;
+use state::*;
 
 pub fn handle(io: &IOHandler, net: &Net, state: &State, user: &mut Option<User>, tokens: &[&str]) {
     let cmd: &str = tokens[0];
@@ -15,7 +10,7 @@ pub fn handle(io: &IOHandler, net: &Net, state: &State, user: &mut Option<User>,
     
     match cmd.trim() {
         "/login" => {
-            *user = match login(args, &io, &net) {
+            *user = match login(&io, &net) {
                 Ok(usr) => {io.print_log("success"); Some(usr)},
                 Err(e) => {
                     io.print_error(&e);
@@ -24,7 +19,7 @@ pub fn handle(io: &IOHandler, net: &Net, state: &State, user: &mut Option<User>,
             };
         },
         "/register" => {
-            *user = match register(args, &io, &net) {
+            *user = match register(&io, &net) {
                 Ok(usr) => {io.print_log("success"); Some(usr)},
                 Err(e) => {
                     io.print_error(&e);
@@ -45,7 +40,7 @@ pub fn handle(io: &IOHandler, net: &Net, state: &State, user: &mut Option<User>,
 
 }
 
-fn login(args: &[&str], io: &IOHandler, net: &Net) -> Result<User, String> {
+fn login(io: &IOHandler, net: &Net) -> Result<User, String> {
     let mut username: String = "".to_string();
     let mut password: String = "".to_string();
     io.read_prompted_line(&mut username, "Username: ");
@@ -53,7 +48,8 @@ fn login(args: &[&str], io: &IOHandler, net: &Net) -> Result<User, String> {
 
     let (sender, receiver) = channel();
 
-    net.add_message(MessageContainer::new(
+    net.add_message(
+        MessageContainer::new(
             Message::new(
                 MessageType::Login{
                     username: username,
@@ -61,8 +57,9 @@ fn login(args: &[&str], io: &IOHandler, net: &Net) -> Result<User, String> {
                 },
                 vec![Net::server_addr().to_string()]
             ),
-        Some(sender)
-    ));
+            Some(sender)
+        )
+    );
 
     let res = match receiver.recv().unwrap() {
         Ok(res) => res,
@@ -80,7 +77,7 @@ fn login(args: &[&str], io: &IOHandler, net: &Net) -> Result<User, String> {
     }
 }
 
-fn register(args: &[&str], io: &IOHandler, net: &Net) -> Result<User, String>{
+fn register(io: &IOHandler, net: &Net) -> Result<User, String>{
     let mut username: String = "".to_string();
     let mut password: String = "".to_string();
     io.read_prompted_line(&mut username, "Username: ");
@@ -115,7 +112,16 @@ fn register(args: &[&str], io: &IOHandler, net: &Net) -> Result<User, String>{
     }
 }
 
-fn connect(args: &[&str], net: &Net, state: &State) -> Result<User, String>{
-    Err("yolo".to_string())
+fn connect(args: &[&str], net: &Net, state: &State) -> Result<(), String>{
+    let o_user = args[0];
+    let route: Vec<String> = match net.get_route(&o_user) {
+        Ok(r) => r,
+        Err(e) => return Err(e),
+    };
+    let conv = Conversation::new(User{handle:o_user.to_string(), route:route});
+    let conv_id = conv.get_id();
+    state.add_conversation(conv);
+    state.set_current_conversation(Some(conv_id));
+    Ok(())
 }
 

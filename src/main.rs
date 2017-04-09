@@ -67,11 +67,13 @@ fn handle_user_input(io: &IOHandler, net: &Net, state: &State) {
 
         } else {
             let curr_conv = state.get_current_conversation();
-
-            if curr_conv.is_none() {
             
+            if curr_conv.is_none() {
+                io.print_error("No current conversation.");
+                continue;
             } else if user.is_none() {
-
+                io.print_error("Not logged in");
+                continue;
             } else {
                 let conv_id = curr_conv.as_ref().unwrap().get_id(); 
                 let tm = TextMessage {
@@ -83,7 +85,7 @@ fn handle_user_input(io: &IOHandler, net: &Net, state: &State) {
                 let mc = MessageContainer::new(
                     Message::new(
                         MessageType::Text{msg: tm.clone()}, 
-                        net.get_route(conv_id, curr_conv.as_ref().unwrap().get_partner())
+                        net.get_route(&curr_conv.as_ref().unwrap().get_partner().handle).unwrap()
                     ),
                     None
                 );

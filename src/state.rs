@@ -10,7 +10,7 @@ use mpmc_queue::MpmcQueue;
 #[derive(Clone, RustcEncodable, RustcDecodable, Hash, PartialEq, Eq)]
 pub struct User {
     pub handle: String,
-    pub addr: String,
+    pub route: Vec<String>,
     // public key
 }
 
@@ -61,7 +61,6 @@ impl<'a> Iterator for NewMessagesIter<'a> {
 pub struct State {
     conversations: Arc<(Mutex<Conversations>, Condvar)>,
     current_conversation: Arc<Mutex<Option<u64>>>,
-    //known_users: HashSet<User>,
     unseen_message_count: Arc<Mutex<u32>>,
     channel: Arc<MpmcQueue<TextMessage>>,
 }
@@ -72,7 +71,6 @@ impl State {
         State {
             conversations: Arc::new((Mutex::new(Conversations::new()), Condvar::new())),
             current_conversation: Arc::new(Mutex::new(None)),
-            //known_users: HashSet::new(),
             unseen_message_count: Arc::new(Mutex::new(0)),
             channel: Arc::new(MpmcQueue::new()),
         }
@@ -111,6 +109,14 @@ impl State {
         self.current_conversation.lock().unwrap().and_then(|u| {
             self.conversations.0.lock().unwrap().get(&u).map(|x| x.clone())
         })
+    }
+
+    pub fn add_conversation(&self, conv: Conversation) {
+        self.conversations.0.lock().unwrap().insert(conv.get_id(), conv);
+    }
+
+    pub fn set_current_conversation(&self, new_conv: Option<u64>) {
+        *self.current_conversation.lock().unwrap() = new_conv;
     }
 }
 
