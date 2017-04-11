@@ -1,5 +1,6 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap};
 use std::sync::{Arc, Mutex, Condvar};
+use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
 use std::clone::Clone;
 
 extern crate rand;
@@ -19,8 +20,9 @@ pub struct Conversation {
     //name: String, Implement when adding group messages
     partner: User, // Remove when adding group messages in favour of 'users'
     messages: Vec<TextMessage>,
-    new_messages: VecDeque<TextMessage>,
+    new_message_count: usize,
     id: u64,
+    priv_id: usize,
     //users: map of all users in conversation. Implement when adding group messages.
 }
 
@@ -30,13 +32,31 @@ impl Conversation {
         Conversation {
             partner: user,
             messages: Vec::new(),
-            new_messages: VecDeque::new(),
+            new_message_count: 0,
             id: rand::random::<u64>(),
+            priv_id: Conversation::next_id(),
         }
+    }
+
+    fn next_id() -> usize {
+        static N: AtomicUsize = ATOMIC_USIZE_INIT;
+        N.fetch_add(1, Ordering::SeqCst)
     }
 
     pub fn get_id(&self) -> u64 {
         self.id
+    }
+
+    pub fn get_priv_id(&self) -> usize {
+        self.priv_id
+    }
+
+    pub fn new_message_count(&self) -> usize {
+        self.new_message_count
+    }
+
+    pub fn set_new_message_count(&mut self, count: usize) {
+        self.new_message_count = count;
     }
 
     pub fn get_partner(&self) -> &User {
@@ -84,15 +104,13 @@ impl State {
 
         // TODO: Fix this garbage.
         if let Some(ref s) = *self.current_conversation.lock().unwrap() {
+            conv.messages.push(msg.clone());
             if *s == msg.clone().conv_id {
                 self.channel.push(msg.clone());
-                conv.messages.push(msg);
             } else {
-                conv.new_messages.push_back(msg);
                 *self.unseen_message_count.lock().unwrap() += 1;
             }
         } else {
-            conv.new_messages.push_back(msg);
             *self.unseen_message_count.lock().unwrap() += 1;
         }
 
@@ -115,8 +133,31 @@ impl State {
         self.conversations.0.lock().unwrap().insert(conv.get_id(), conv);
     }
 
-    pub fn set_current_conversation(&self, new_conv: Option<u64>) {
+    pub fn set_current_conversation(&self, new_conv: Option<u64>) -> Option<Vec<TextMessage>> {
         *self.current_conversation.lock().unwrap() = new_conv;
+        if let Some(conv) = new_conv {
+            let ref mut curr = *self.conversations.0.lock().unwrap();
+            let mut curr2: &mut Conversation = curr.get_mut(&conv).unwrap();
+            curr2.set_new_message_count(0);
+            let mut c = curr2.messages.clone();
+            c.reverse();
+            Some(c)
+        } else {
+            None
+        }
+    }
+
+    pub fn list_conversations(&self) -> Vec<String> {
+        self.conversations.0.lock().unwrap().values()
+            .map(|c| format!("{} [{}]: {}", 
+                             c.get_priv_id(), 
+                             c.new_message_count(), 
+                             c.get_partner().handle))
+            .collect()
+    }
+
+    pub fn conv_name_to_id(&self, name: &str) -> Option<u64> {
+        None
     }
 }
 

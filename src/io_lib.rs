@@ -18,7 +18,6 @@ impl IOHandler {
 
     pub fn read_prompted_line(&self, mut string: &mut String, prompt: &str) {
         print!("{}", prompt);
-        //print!("{}", self.prompt.lock().unwrap().get_prompt());
         io::stdout().flush().expect("Could not flush buffer.");
         self.read_line(&mut string);
     }
@@ -28,6 +27,20 @@ impl IOHandler {
         io::stdout().flush().expect("Could not flush buffer.");
     }
 
+    pub fn print_messages(&self, msgs: Vec<TextMessage>) {
+        for m in msgs {
+            self.print_message(m);
+        }
+    }
+
+    pub fn print_conversations(&self, convs: Vec<String>) {
+        println!("Conversations");
+        for c in convs {
+            println!("{}", c);
+        }
+        io::stdout().flush().expect("Could not flush buffer.");
+    }
+    
     pub fn print_log(&self, text: &str) {
         println!("{}", text);
         io::stdout().flush().expect("Could not flush buffer.");
@@ -36,12 +49,6 @@ impl IOHandler {
     pub fn print_error(&self, err: &str) {
         println!("Error: {}", err);
         io::stdout().flush().expect("Could not flush buffer.");
-    }
-}
-
-impl Drop for IOHandler {
-    fn drop(&mut self) {
-        //endwin();
     }
 }
 

@@ -46,7 +46,6 @@ pub enum MessageType {
         username: String,
         password: String,
     },
-    GetUser (String),
     Connect (String),
     Response (ResponseType),
     Text {
@@ -169,11 +168,13 @@ impl Net {
         stream.read_exact(msg_buf.as_mut_slice()).unwrap();
 
         // Create the message from the raw bytes.
-        json::decode(str::from_utf8(&msg_buf).unwrap()).unwrap()
+        let s = str::from_utf8(&msg_buf).unwrap();
+        println!("Got: {}", s);
+        io::stdout().flush().unwrap();
+        json::decode(s).unwrap()
     }
 
     fn sender(net: Net) {
-        //let mut element: Option<MessageContainer> = None;
 
         loop {
             // Grab message from queue.
@@ -191,12 +192,14 @@ impl Net {
                     continue;
                 }
             };
-            println!("Connected");
-            io::stdout().flush().unwrap();
 
             // Send the message.
             // TODO: Do something with the error.
-            if let Err(_) = Net::send_message(&mut stream, &mut msg) { continue; } 
+            if let Err(_) = Net::send_message(&mut stream, &mut msg) { 
+                println!("Error sending message");
+                io::stdout().flush().unwrap();
+                continue; 
+            } 
 
             // Get the response message if there will be one.
             if let Some(res) = response {
