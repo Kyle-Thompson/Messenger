@@ -5,6 +5,5 @@ authors = ["Kyle Thompson <kyle.thompson228@gmail.com>"]
 
 [dependencies]
 rustc-serialize = "0.3"
-ncurses = "5.85.0"
 crossbeam = "0.2"
 rand = "0.3"

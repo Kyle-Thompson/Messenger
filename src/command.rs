@@ -12,7 +12,7 @@ pub fn handle(io: &IOHandler, net: &Net, state: &State, user: &mut Option<User>,
     match cmd.trim() {
         "/login" => {
             *user = match login(&io, &net) {
-                Ok(usr) => {io.print_log("success"); Some(usr)},
+                Ok(usr) => Some(usr),
                 Err(e) => {
                     io.print_error(&e);
                     None
@@ -21,7 +21,7 @@ pub fn handle(io: &IOHandler, net: &Net, state: &State, user: &mut Option<User>,
         },
         "/register" => {
             *user = match register(&io, &net) {
-                Ok(usr) => {io.print_log("success"); Some(usr)},
+                Ok(usr) => Some(usr),
                 Err(e) => {
                     io.print_error(&e);
                     None

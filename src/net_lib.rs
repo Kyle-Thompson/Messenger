@@ -14,7 +14,7 @@ use rustc_serialize::json;
 use mpmc_queue::MpmcQueue;
 use state::User;
 
-const SERVER_ADDR: &'static str = "159.203.57.173:5000";
+const SERVER_ADDR: &'static str = "138.197.153.113:5001";
 
 #[derive(Clone, RustcEncodable, RustcDecodable, PartialEq)]
 pub struct TextMessage {
@@ -169,8 +169,8 @@ impl Net {
 
         // Create the message from the raw bytes.
         let s = str::from_utf8(&msg_buf).unwrap();
-        println!("Got: {}", s);
-        io::stdout().flush().unwrap();
+        //println!("Got: {}", s);
+        //io::stdout().flush().unwrap();
         json::decode(s).unwrap()
     }
 
@@ -181,8 +181,8 @@ impl Net {
             let MessageContainer{mut msg, response} = net.send_work.pop(); 
             
             // Connect to the destination.
-            let dest = msg.route.pop().unwrap();
-            let mut stream = match TcpStream::connect(&dest) {
+            let dest: String = msg.route.pop().unwrap();
+            let mut stream: TcpStream = match TcpStream::connect(&*dest) {
                 Ok(s) => s,
                 Err(_) => {
                     if let Some(res) = response {

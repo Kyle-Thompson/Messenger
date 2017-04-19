@@ -173,11 +173,7 @@ impl State {
             let mut curr2: &mut Conversation = match curr.get_mut(&conv) {
                 Some(c) => c,
                 None => {
-                    println!("Size of conv map {}", curr3.len());
-                    println!("Couldn't find {} out of:", conv);
-                    curr3.keys().into_iter().map(|c| println!("{}", c));
-                    io::stdout().flush().unwrap();
-                    panic!();
+                    panic!("failed in set_current_conversation");
                 }
             };
             curr2.set_new_message_count(0);
