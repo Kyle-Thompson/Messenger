@@ -2,7 +2,7 @@ use std::collections::{HashMap};
 use std::sync::{Arc, Mutex, Condvar};
 use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
 use std::clone::Clone;
-
+use std::io::{self, Write};
 extern crate rand;
 
 use net_lib::TextMessage;
@@ -38,6 +38,16 @@ impl Conversation {
         }
     }
 
+    pub fn from_id(user: User, id: u64) -> Conversation {
+        Conversation {
+            partner: user,
+            messages: Vec::new(),
+            new_message_count: 0,
+            id: id,
+            priv_id: Conversation::next_id(),
+        }
+    }
+
     fn next_id() -> usize {
         static N: AtomicUsize = ATOMIC_USIZE_INIT;
         N.fetch_add(1, Ordering::SeqCst)
@@ -53,6 +63,10 @@ impl Conversation {
 
     pub fn new_message_count(&self) -> usize {
         self.new_message_count
+    }
+
+    pub fn inc_new_msg_count(&mut self) {
+        self.new_message_count += 1;
     }
 
     pub fn set_new_message_count(&mut self, count: usize) {
@@ -85,6 +99,13 @@ pub struct State {
     channel: Arc<MpmcQueue<TextMessage>>,
 }
 
+fn print_map(map: &HashMap<u64, Conversation>) {
+    for (k, v) in map.iter() {
+        println!("{}: {}, {}", k, v.get_partner().handle, v.new_message_count());
+    }
+    io::stdout().flush().unwrap();
+}
+
 impl State {
 
     pub fn new() -> State {
@@ -98,13 +119,19 @@ impl State {
 
     pub fn add_new_message(&self, msg: TextMessage) {
         let &(ref mutex, ref cvar) = &*self.conversations;
-        let convs: &mut Conversations = &mut *mutex.lock().unwrap();
+        {
+            println!("Before");
+            let conv = &*mutex.lock().unwrap();
+            print_map(&conv);
+        }
+        {let convs: &mut Conversations = &mut *mutex.lock().unwrap();
         let conv: &mut Conversation = convs.entry(msg.clone().conv_id)
-            .or_insert(Conversation::new(msg.clone().sender));
+            .or_insert(Conversation::from_id(msg.clone().sender, msg.clone().conv_id));
+        conv.messages.push(msg.clone());
+        conv.inc_new_msg_count();
 
         // TODO: Fix this garbage.
         if let Some(ref s) = *self.current_conversation.lock().unwrap() {
-            conv.messages.push(msg.clone());
             if *s == msg.clone().conv_id {
                 self.channel.push(msg.clone());
             } else {
@@ -114,7 +141,12 @@ impl State {
             *self.unseen_message_count.lock().unwrap() += 1;
         }
 
-        cvar.notify_one();
+        cvar.notify_one();}
+        {
+            println!("After");
+            let conv = &*mutex.lock().unwrap();
+            print_map(&conv);
+        }
     }
 
     pub fn get_new_messages(&self) -> NewMessagesIter {
@@ -137,7 +169,17 @@ impl State {
         *self.current_conversation.lock().unwrap() = new_conv;
         if let Some(conv) = new_conv {
             let ref mut curr = *self.conversations.0.lock().unwrap();
-            let mut curr2: &mut Conversation = curr.get_mut(&conv).unwrap();
+            let curr3 = curr.clone();
+            let mut curr2: &mut Conversation = match curr.get_mut(&conv) {
+                Some(c) => c,
+                None => {
+                    println!("Size of conv map {}", curr3.len());
+                    println!("Couldn't find {} out of:", conv);
+                    curr3.keys().into_iter().map(|c| println!("{}", c));
+                    io::stdout().flush().unwrap();
+                    panic!();
+                }
+            };
             curr2.set_new_message_count(0);
             let mut c = curr2.messages.clone();
             c.reverse();
@@ -157,6 +199,15 @@ impl State {
     }
 
     pub fn conv_name_to_id(&self, name: &str) -> Option<u64> {
+        for conv in self.conversations.0.lock().unwrap().values() {
+            println!("Comparing {} and {}", conv.get_partner().handle.trim(), name);
+            io::stdout().flush().unwrap();
+            if conv.get_partner().handle.trim() == name.trim() {
+                println!("Setting to conv id {}", conv.get_id());
+                io::stdout().flush().unwrap();
+                return Some(conv.get_id());
+            }
+        }
         None
     }
 }

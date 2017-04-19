@@ -34,11 +34,14 @@ pub fn handle(io: &IOHandler, net: &Net, state: &State, user: &mut Option<User>,
             }
         },
         "/leave" => {
-            leave(&state, &io)
+            leave(&state, &io);
         }
         "/join" => {
-            join(args[0], &state, &io)
-        }
+            join(args[0], &state, &io);
+        },
+        "/list" => {
+            list(&state, &io);
+        },
         _ => {
             io.print_error("Command not recognized");
         },
@@ -141,6 +144,12 @@ fn leave(state: &State, io: &IOHandler) {
 fn join(conv: &str, state: &State, io: &IOHandler) {
     if let Some(id) = state.conv_name_to_id(&conv) {
         io.print_messages(state.set_current_conversation(Some(id)).unwrap());
+        io.print_log(&format!("Joined conversation with {}.", state.get_current_conversation().unwrap().get_partner().handle));
+    } else {
+        io.print_error("invalid conversation id");
     }
 }
 
+fn list(state: &State, io: &IOHandler) {
+    io.print_conversations(state.list_conversations());
+}

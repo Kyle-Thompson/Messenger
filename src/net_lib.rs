@@ -127,7 +127,7 @@ impl Net {
     }
 
     fn listener(net: Net) {
-        let server = TcpListener::bind("127.0.0.1:5000").unwrap();
+        let server = TcpListener::bind("0.0.0.0:5000").unwrap();
 
         for stream in server.incoming() {
             match stream {
