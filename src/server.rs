@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::thread;
 use std::mem;
-use std::io::{self, Read, Write};
+use std::io::{Read, Write};
 use std::str;
 
 extern crate rustc_serialize;
