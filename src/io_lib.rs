@@ -16,10 +16,12 @@ impl IOHandler {
         io::stdin().read_line(&mut string).expect("Failed to read user input.");
     }
 
-    pub fn read_prompted_line(&self, mut string: &mut String, prompt: &str) {
+    pub fn read_prompted_line(&self, prompt: &str) -> String {
+        let mut string = "".to_string();
         print!("{}", prompt);
         io::stdout().flush().expect("Could not flush buffer.");
         self.read_line(&mut string);
+        string.trim().to_string()
     }
 
     pub fn print_message(&self, msg: TextMessage) {

@@ -1,18 +1,26 @@
 use std::collections::{HashMap};
+use std::collections::hash_map::Entry;
 use std::sync::{Arc, Mutex, Condvar};
 use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
 use std::clone::Clone;
-use std::io::{self, Write};
+//use std::io::{self, Write};
 extern crate rand;
 
 use net_lib::TextMessage;
+use net_lib::Net;
 use mpmc_queue::MpmcQueue;
+
+#[derive(Clone, RustcEncodable, RustcDecodable, Hash, PartialEq, Eq)]
+pub struct UserInfo {
+    pub route: Vec<String>,
+    pub public_key: [u8; 32],
+}
 
 #[derive(Clone, RustcEncodable, RustcDecodable, Hash, PartialEq, Eq)]
 pub struct User {
     pub handle: String,
-    pub route: Vec<String>,
-    // public key
+    pub route: Vec<String>, // replace this will addr again soon.
+    pub public_key: [u8; 32],
 }
 
 #[derive(Clone, PartialEq)]
@@ -97,13 +105,7 @@ pub struct State {
     current_conversation: Arc<Mutex<Option<u64>>>,
     unseen_message_count: Arc<Mutex<u32>>,
     channel: Arc<MpmcQueue<TextMessage>>,
-}
-
-fn print_map(map: &HashMap<u64, Conversation>) {
-    for (k, v) in map.iter() {
-        println!("{}: {}, {}", k, v.get_partner().handle, v.new_message_count());
-    }
-    io::stdout().flush().unwrap();
+    users: Arc<Mutex<HashMap<String, UserInfo>>>,
 }
 
 impl State {
@@ -114,17 +116,14 @@ impl State {
             current_conversation: Arc::new(Mutex::new(None)),
             unseen_message_count: Arc::new(Mutex::new(0)),
             channel: Arc::new(MpmcQueue::new()),
+            users: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     pub fn add_new_message(&self, msg: TextMessage) {
         let &(ref mutex, ref cvar) = &*self.conversations;
-        {
-            println!("Before");
-            let conv = &*mutex.lock().unwrap();
-            print_map(&conv);
-        }
-        {let convs: &mut Conversations = &mut *mutex.lock().unwrap();
+
+        let convs: &mut Conversations = &mut *mutex.lock().unwrap();
         let conv: &mut Conversation = convs.entry(msg.clone().conv_id)
             .or_insert(Conversation::from_id(msg.clone().sender, msg.clone().conv_id));
         conv.messages.push(msg.clone());
@@ -141,12 +140,7 @@ impl State {
             *self.unseen_message_count.lock().unwrap() += 1;
         }
 
-        cvar.notify_one();}
-        {
-            println!("After");
-            let conv = &*mutex.lock().unwrap();
-            print_map(&conv);
-        }
+        cvar.notify_one();
     }
 
     pub fn get_new_messages(&self) -> NewMessagesIter {
@@ -169,7 +163,6 @@ impl State {
         *self.current_conversation.lock().unwrap() = new_conv;
         if let Some(conv) = new_conv {
             let ref mut curr = *self.conversations.0.lock().unwrap();
-            let curr3 = curr.clone();
             let mut curr2: &mut Conversation = match curr.get_mut(&conv) {
                 Some(c) => c,
                 None => {
@@ -178,7 +171,7 @@ impl State {
             };
             curr2.set_new_message_count(0);
             let mut c = curr2.messages.clone();
-            c.reverse();
+            c.reverse(); // TODO: this doesn't need to be reversed.
             Some(c)
         } else {
             None
@@ -196,15 +189,26 @@ impl State {
 
     pub fn conv_name_to_id(&self, name: &str) -> Option<u64> {
         for conv in self.conversations.0.lock().unwrap().values() {
-            println!("Comparing {} and {}", conv.get_partner().handle.trim(), name);
-            io::stdout().flush().unwrap();
             if conv.get_partner().handle.trim() == name.trim() {
-                println!("Setting to conv id {}", conv.get_id());
-                io::stdout().flush().unwrap();
                 return Some(conv.get_id());
             }
         }
         None
+    }
+
+    pub fn get_user_info(&self, user: &str, net: &Net) -> Result<UserInfo, String> {
+        match self.users.lock().unwrap().entry(user.to_string()) {
+            Entry::Occupied(o) => Ok(o.get().clone()),
+            Entry::Vacant(v) => {
+                net.get_user_info(&user).map(|ui| v.insert(ui).clone())
+                /*match net.get_user_info(&user) {
+                    Ok(ui) => {
+                        Ok(v.insert(ui).clone())
+                    },
+                    Err(e) => Err(e.to_string())
+                }*/
+            }
+        }
     }
 }
 

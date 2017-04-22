@@ -1,5 +1,8 @@
 use std::sync::mpsc::channel;
 use std::error::Error;
+use std::fs::File;
+use std::env;
+use std::io::Read;
 
 use io_lib::IOHandler;
 use net_lib::*;
@@ -50,10 +53,9 @@ pub fn handle(io: &IOHandler, net: &Net, state: &State, user: &mut Option<User>,
 }
 
 fn login(io: &IOHandler, net: &Net) -> Result<User, String> {
-    let mut username: String = "".to_string();
-    let mut password: String = "".to_string();
-    io.read_prompted_line(&mut username, "Username: ");
-    io.read_prompted_line(&mut password, "Password: ");
+
+    let mut username = io.read_prompted_line("Username: ");    
+    let mut password = io.read_prompted_line("Password: ");
 
     let (sender, receiver) = channel();
 
@@ -66,7 +68,8 @@ fn login(io: &IOHandler, net: &Net) -> Result<User, String> {
                 },
                 vec![Net::server_addr().to_string()]
             ),
-            Some(sender)
+            Some(sender),
+            None
         )
     );
 
@@ -86,24 +89,32 @@ fn login(io: &IOHandler, net: &Net) -> Result<User, String> {
     }
 }
 
-fn register(io: &IOHandler, net: &Net) -> Result<User, String>{
-    let mut username: String = "".to_string();
-    let mut password: String = "".to_string();
-    io.read_prompted_line(&mut username, "Username: ");
-    io.read_prompted_line(&mut password, "Password: ");
+fn register(io: &IOHandler, net: &Net) -> Result<User, String> {
+
+    let mut username = io.read_prompted_line("Username: ");    
+    let mut password = io.read_prompted_line("Password: ");
+
+    // Get the public key.
+    let mut public_key = [0u8; 32];
+    let mut pub_key_file = File::open(env::home_dir().unwrap().join(".secmsg/keys/public")).unwrap();
+    pub_key_file.read_exact(&mut public_key).unwrap();
 
     let (sender, receiver) = channel();
 
-    net.add_message(MessageContainer::new(
+    net.add_message(
+        MessageContainer::new(
             Message::new(
                 MessageType::Register{
                     username: username,
-                    password: password
+                    password: password,
+                    public_key: public_key
                 },
                 vec![Net::server_addr().to_string()]
             ),
-        Some(sender)
-    ));
+            Some(sender),
+            None
+        )
+    );
 
     let res = match receiver.recv() {
         Ok(res) => match res {
@@ -124,12 +135,20 @@ fn register(io: &IOHandler, net: &Net) -> Result<User, String>{
     }
 }
 
-fn connect(o_user: &str, net: &Net, state: &State) -> Result<(), String>{
-    let route: Vec<String> = match net.get_route(&o_user) {
-        Ok(r) => r,
+fn connect(o_user: &str, net: &Net, state: &State) -> Result<(), String> {
+    let ui: UserInfo = match state.get_user_info(&o_user, net) {
+        Ok(ui) => ui,
         Err(e) => return Err(e),
     };
-    let conv = Conversation::new(User{handle:o_user.to_string(), route:route});
+
+    let conv = Conversation::new(
+        User {
+            handle: o_user.to_string(),
+            route: ui.route,
+            public_key: ui.public_key
+        }
+    );
+    
     let conv_id = conv.get_id();
     state.add_conversation(conv);
     state.set_current_conversation(Some(conv_id));
@@ -144,7 +163,6 @@ fn leave(state: &State, io: &IOHandler) {
 fn join(conv: &str, state: &State, io: &IOHandler) {
     if let Some(id) = state.conv_name_to_id(&conv) {
         io.print_messages(state.set_current_conversation(Some(id)).unwrap());
-        io.print_log(&format!("Joined conversation with {}.", state.get_current_conversation().unwrap().get_partner().handle));
     } else {
         io.print_error("invalid conversation id");
     }

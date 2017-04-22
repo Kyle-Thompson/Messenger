@@ -1,18 +1,18 @@
 use std::net::{TcpListener, TcpStream};
 use std::thread::{self};
-use std::collections::{HashMap};
-use std::collections::hash_map::Entry;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use std::sync::mpsc::{channel, Sender};
 use std::io::{Read, Write};
 use std::str;
 use std::mem;
-use std::io;
 
 use rustc_serialize::json;
 
 use mpmc_queue::MpmcQueue;
 use state::User;
+use state::UserInfo;
+use crypto_lib::Crypto;
+use crypto_lib::KeyArr;
 
 const SERVER_ADDR: &'static str = "138.197.153.113:5001";
 
@@ -32,7 +32,7 @@ impl ToString for TextMessage {
 #[derive(Clone, RustcEncodable, RustcDecodable, PartialEq)]
 pub enum ResponseType {
     User (User),
-    Connection (Vec<String>),
+    Connection (UserInfo),
     Error (String)
 }
 
@@ -45,6 +45,7 @@ pub enum MessageType {
     Register {
         username: String,
         password: String,
+        public_key: [u8; 32],
     },
     Connect (String),
     Response (ResponseType),
@@ -76,13 +77,15 @@ type Response = Sender<Result<Option<Message>, String>>;
 pub struct MessageContainer {
     msg: Message,
     response: Option<Response>,
+    key: Option<KeyArr>
 }
 
 impl MessageContainer {
-    pub fn new(msg: Message, response: Option<Response>) -> MessageContainer {
+    pub fn new(msg: Message, response: Option<Response>, key: Option<KeyArr>) -> MessageContainer {
         MessageContainer {
             msg: msg,
             response: response,
+            key: key,
         }
     }
 }
@@ -92,19 +95,23 @@ pub struct Net {
     send_work: Arc<MpmcQueue<MessageContainer>>,
     recv_work: Arc<MpmcQueue<TcpStream>>,
     new_messages: Arc<MpmcQueue<TextMessage>>,
-    routes: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    //routes: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    crypto: Crypto,
+    server_key: Option<KeyArr>,
 }
 
 impl Net {
 
-    pub fn new() -> Net {
+    pub fn new(crypto: Crypto) -> Net {
 
         // The net struct to be returned.
         let mut net = Net {
             send_work: Arc::new(MpmcQueue::new()),
             recv_work: Arc::new(MpmcQueue::new()),
             new_messages: Arc::new(MpmcQueue::new()),
-            routes: Arc::new(Mutex::new(HashMap::new())),
+            //routes: Arc::new(Mutex::new(HashMap::new())),
+            crypto: crypto,
+            server_key: None,
         };
        
         // Spawn main receiver.
@@ -150,7 +157,11 @@ impl Net {
                     _ => continue, // Can't be anything other than text yet.
                 }
             } else { // Forward the message along.
-                net.send_work.push(MessageContainer{msg: message, response: None});
+                net.send_work.push(MessageContainer{
+                    msg: message, 
+                    response: None,
+                    key: None
+                });
             }
         }
     }
@@ -169,8 +180,6 @@ impl Net {
 
         // Create the message from the raw bytes.
         let s = str::from_utf8(&msg_buf).unwrap();
-        //println!("Got: {}", s);
-        //io::stdout().flush().unwrap();
         json::decode(s).unwrap()
     }
 
@@ -178,7 +187,7 @@ impl Net {
 
         loop {
             // Grab message from queue.
-            let MessageContainer{mut msg, response} = net.send_work.pop(); 
+            let MessageContainer{mut msg, response, key} = net.send_work.pop(); 
             
             // Connect to the destination.
             let dest: String = msg.route.pop().unwrap();
@@ -187,7 +196,6 @@ impl Net {
                 Err(_) => {
                     if let Some(res) = response {
                         res.send(Err("Could not connect to destination".to_string())).unwrap();
-                        // TODO: Let server know about the disconnected host.
                     }
                     continue;
                 }
@@ -196,8 +204,6 @@ impl Net {
             // Send the message.
             // TODO: Do something with the error.
             if let Err(_) = Net::send_message(&mut stream, &mut msg) { 
-                println!("Error sending message");
-                io::stdout().flush().unwrap();
                 continue; 
             } 
 
@@ -235,7 +241,7 @@ impl Net {
     fn needs_response(msg_type: &MessageType) -> bool {
         match *msg_type {
             MessageType::Login{ref username, ref password} => true,
-            MessageType::Register{ref username, ref password} => true,
+            MessageType::Register{ref username, ref password, ref public_key} => true,
             MessageType::Connect(ref user) => true,
             _ => false,
         }
@@ -249,7 +255,7 @@ impl Net {
         self.send_work.push(msg);
     }
 
-    pub fn get_route(&self, name: &str) -> Result<Vec<String>, String> {
+    /*pub fn get_route(&self, name: &str) -> Result<Vec<String>, String> {
         match self.routes.lock().unwrap().entry(name.to_string()) {
             Entry::Occupied(o) => Ok(o.get().clone()),
             Entry::Vacant(v) => {
@@ -261,9 +267,9 @@ impl Net {
                 }
             }
         }
-    }
+    }*/
 
-    fn gen_route(&self, user: &str) -> Result<Vec<String>, String> {
+    pub fn get_user_info(&self, user: &str) -> Result<UserInfo, String> {
         let (sender, receiver) = channel();
         self.add_message(
             MessageContainer::new(
@@ -271,7 +277,8 @@ impl Net {
                     MessageType::Connect(user.to_string()),
                     vec![SERVER_ADDR.to_string()]
                 ),
-                Some(sender)
+                Some(sender),
+                self.server_key.clone()
             )
         );
 
@@ -284,7 +291,7 @@ impl Net {
 
         if let MessageType::Response(res) = res.msg_type {
             match res {
-                ResponseType::Connection(route) => Ok(route),
+                ResponseType::Connection(u) => Ok(u),
                 ResponseType::Error(e) => Err(e),
                 _ => Err("Something went wrong".to_string())
             }
