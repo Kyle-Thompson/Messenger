@@ -95,7 +95,6 @@ pub struct Net {
     send_work: Arc<MpmcQueue<MessageContainer>>,
     recv_work: Arc<MpmcQueue<TcpStream>>,
     new_messages: Arc<MpmcQueue<TextMessage>>,
-    //routes: Arc<Mutex<HashMap<String, Vec<String>>>>,
     crypto: Crypto,
     server_key: Option<KeyArr>,
 }
@@ -109,7 +108,6 @@ impl Net {
             send_work: Arc::new(MpmcQueue::new()),
             recv_work: Arc::new(MpmcQueue::new()),
             new_messages: Arc::new(MpmcQueue::new()),
-            //routes: Arc::new(Mutex::new(HashMap::new())),
             crypto: crypto,
             server_key: None,
         };
