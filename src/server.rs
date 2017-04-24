@@ -5,6 +5,7 @@ use std::thread;
 use std::mem;
 use std::io::{Read, Write};
 use std::str;
+use std::cmp;
 use std::env;
 use std::fs::{self, File};
 //use std::io;
@@ -179,6 +180,16 @@ fn gen_route(user_ip: &str, key: &KeyArr) -> Vec<(String, KeyArr)> {
     vec![(user_ip.to_string(), key.clone())]
 }
 
+fn generate_route(users: &HashMap<String, KnownUser>, dest: (String, KeyArr)) -> Vec<(String, KeyArr)> {
+    let mut r = vec![];
+    let n = cmp::min(3, users.len());
+    for v in users.values().take(n) {
+        r.push((v.addr.clone(), v.public_key.clone()))
+    }
+    r.push(dest);
+    r
+}
+
 fn login_response(username: String, password: String, users: &UserMap, usr_ip: String, crypto: &Crypto, key: &KeyArr) -> Message {
     let route = gen_route(&usr_ip, &key);
     match users.lock().unwrap().get(&username) {
@@ -271,7 +282,8 @@ fn connect_response(name: String, users: &UserMap, route: Vec<(String, KeyArr)>,
                 ToUser::ServerResponse(
                     ResponseType::Connection(
                         UserInfo {
-                            route: vec![(known_user.addr.clone(), known_user.public_key.clone())],
+                            //route: vec![(known_user.addr.clone(), known_user.public_key.clone())],
+                            route: generate_route(users, (known_user.addr.clone(), known_user.public_key.clone())),
                             addr: known_user.addr.clone(),
                             public_key: known_user.public_key.clone()
                         }

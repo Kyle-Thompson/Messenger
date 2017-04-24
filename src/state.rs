@@ -16,7 +16,7 @@ use mpmc_queue::MpmcQueue;
 #[derive(Clone, RustcEncodable, RustcDecodable, Hash, PartialEq, Eq)]
 pub struct UserInfo {
     pub route: Vec<(String, KeyArr)>,
-    pub addr: String,
+    pub addr: String, // see if this can be replaced by a call to the last element in route.
     pub public_key: [u8; 32],
 }
 

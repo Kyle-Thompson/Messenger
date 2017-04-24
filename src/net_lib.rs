@@ -4,7 +4,7 @@ use std::net::{TcpListener, TcpStream};
 use std::thread::{self};
 use std::sync::{Arc};
 use std::sync::mpsc::{channel, Sender};
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::str;
 use std::mem;
 //use std::io;
@@ -223,6 +223,8 @@ impl Net {
                     MessageType::Server(_) => continue,
                 }
             } else { // Forward the message along.
+                println!("Forwarding message");
+                io::stdout().flush().unwrap();
                 net.send_work.push(MessageContainer{
                     msg: message, 
                     response: None,

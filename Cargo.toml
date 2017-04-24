@@ -16,7 +16,3 @@ name = "client"
 [[bin]]
 path = "src/server.rs"
 name = "server"
-
-[[bin]]
-path = "src/test.rs"
-name = "test"
