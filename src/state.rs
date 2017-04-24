@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::collections::{HashMap};
 use std::collections::hash_map::Entry;
 use std::sync::{Arc, Mutex, Condvar};
@@ -8,18 +10,20 @@ extern crate rand;
 
 use net_lib::TextMessage;
 use net_lib::Net;
+use crypto_lib::KeyArr;
 use mpmc_queue::MpmcQueue;
 
 #[derive(Clone, RustcEncodable, RustcDecodable, Hash, PartialEq, Eq)]
 pub struct UserInfo {
-    pub route: Vec<String>,
+    pub route: Vec<(String, KeyArr)>,
+    pub addr: String,
     pub public_key: [u8; 32],
 }
 
 #[derive(Clone, RustcEncodable, RustcDecodable, Hash, PartialEq, Eq)]
 pub struct User {
     pub handle: String,
-    pub route: Vec<String>, // replace this will addr again soon.
+    pub addr: String, // replace this will addr again soon.
     pub public_key: [u8; 32],
 }
 

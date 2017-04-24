@@ -23,6 +23,7 @@ use net_lib::Message;
 use net_lib::MessageType;
 use net_lib::MessageContainer;
 use net_lib::TextMessage;
+use net_lib::ToUser;
 use crypto_lib::Crypto;
 use io_lib::IOHandler;
 use state::State;
@@ -33,7 +34,7 @@ fn main() {
     let io = IOHandler::new();
     let state = State::new();
 
-    let priv_key = {
+    let (priv_key, pub_key) = {
         let mut keydir = match env::home_dir() {
             Some(p) => p,
             None    => {
@@ -44,7 +45,6 @@ fn main() {
 
         keydir.push(".secmsg/keys");
         if !keydir.join("private").exists() || !keydir.join("public").exists() {
-            io.print_log("Creating a new key pair");
             fs::create_dir_all(&keydir).unwrap();
 
             let (priv_key, pub_key) = crypto_lib::gen_key_pair();
@@ -55,9 +55,8 @@ fn main() {
             let mut pub_key_file = File::create(keydir.join("public")).unwrap();
             pub_key_file.write_all(&pub_key).unwrap();
 
-            priv_key
+            (priv_key, pub_key)
         } else {
-            io.print_log("Key pair found!");
             let mut priv_key = [0u8; 32];
             let mut priv_key_file = File::open(keydir.join("private")).unwrap();
             priv_key_file.read_exact(&mut priv_key).unwrap();
@@ -66,10 +65,10 @@ fn main() {
             let mut pub_key_file = File::open(keydir.join("public")).unwrap();
             pub_key_file.read_exact(&mut pub_key).unwrap();
 
-            priv_key
+            (priv_key, pub_key)
         }
     };
-    let net = Net::new(Crypto::new(priv_key));
+    let net = Net::new(Crypto::new(priv_key, pub_key));
         
     crossbeam::scope(|scope| {
         scope.spawn(|| {
@@ -129,11 +128,12 @@ fn handle_user_input(io: &IOHandler, net: &Net, state: &State) {
                 let partner = curr_conv.as_ref().unwrap().get_partner();
                 let mc = MessageContainer::new(
                     Message::new(
-                        MessageType::Text{msg: tm.clone()}, 
-                        state.get_user_info(&partner.handle, &net).unwrap().route
+                        MessageType::User(ToUser::Text(tm.clone())), 
+                        state.get_user_info(&partner.handle, &net).unwrap().route,
+                        &net.crypto
                     ),
                     None,
-                    Some(partner.public_key)
+                    false
                 );
                 
                 // Send the message off to the network.

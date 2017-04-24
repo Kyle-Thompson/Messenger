@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::fmt;
+
 use rand::{Rng, OsRng};
 use crypto::curve25519::{curve25519_base, curve25519};
 use crypto::chacha20poly1305::ChaCha20Poly1305;
@@ -94,9 +96,21 @@ pub enum EncryptError {
     RngInitializationFailed,
 }
 
+impl fmt::Debug for EncryptError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Failed to encrypt")
+    }
+}
+
 pub enum DecryptError {
     Malformed,
     Invalid,
+}
+
+impl fmt::Debug for DecryptError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Failed to decrypt")
+    }
 }
 
 pub fn gen_key_pair() -> (KeyArr, KeyArr) {
@@ -107,13 +121,15 @@ pub fn gen_key_pair() -> (KeyArr, KeyArr) {
 
 #[derive(Clone)]
 pub struct Crypto {
-    priv_key: [u8; 32],
+    priv_key: KeyArr,
+    pub pub_key: KeyArr,
 }
 
 impl Crypto {
-    pub fn new(private_key: [u8; 32]) -> Crypto {
+    pub fn new(private_key: KeyArr, public_key: KeyArr) -> Crypto {
         Crypto {
             priv_key: private_key,
+            pub_key: public_key,
         }
     }
 

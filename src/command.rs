@@ -54,22 +54,27 @@ pub fn handle(io: &IOHandler, net: &Net, state: &State, user: &mut Option<User>,
 
 fn login(io: &IOHandler, net: &Net) -> Result<User, String> {
 
-    let mut username = io.read_prompted_line("Username: ");    
+    let mut username = io.read_prompted_line("Username: ");
     let mut password = io.read_prompted_line("Password: ");
+
+    // Get the public key.
+    let mut public_key = [0u8; 32];
+    let mut pub_key_file = File::open(env::home_dir().unwrap().join(".secmsg/keys/public")).unwrap();
+    pub_key_file.read_exact(&mut public_key).unwrap();
 
     let (sender, receiver) = channel();
 
     net.add_message(
         MessageContainer::new(
             Message::new(
-                MessageType::Login{
-                    username: username,
-                    password: password
-                },
-                vec![Net::server_addr().to_string()]
+                MessageType::Server(
+                    ToServer::Login(username, password, public_key)
+                ),
+                vec![(Net::server_addr().to_string(), net.get_server_key())],
+                &net.crypto
             ),
             Some(sender),
-            None
+            true
         )
     );
 
@@ -78,15 +83,29 @@ fn login(io: &IOHandler, net: &Net) -> Result<User, String> {
         Err(e) => return Err(e.to_string()),
     };
 
-    if let MessageType::Response(res) = res.unwrap().msg_type {
-        match res {
-            ResponseType::User(u) => Ok(u),
-            ResponseType::Error(e) => Err(e),
-            _ => Err("Something went wrong".to_string())
+    if let MessageType::User(res) = Net::data_to_type(&res.unwrap().data) {
+        if let ToUser::ServerResponse(res) = res {
+            match res {
+                ResponseType::User(u) => Ok(u),
+                ResponseType::Error(e) => Err(e),
+                _ => Err("Something went wrong".to_string())
+            }
+        } else {
+            Err("Reply was not of type ServerResponse".to_string())
         }
     } else {
-        Err("Reply was not of type 'Response'. Whut?".to_string())
+        Err("Reply was not of type User".to_string())
     }
+
+    // if let MessageType::Response(res) = res.unwrap().msg_type {
+    //     match res {
+    //         ResponseType::User(u) => Ok(u),
+    //         ResponseType::Error(e) => Err(e),
+    //         _ => Err("Something went wrong".to_string())
+    //     }
+    // } else {
+    //     Err("Reply was not of type 'Response'. Whut?".to_string())
+    // }
 }
 
 fn register(io: &IOHandler, net: &Net) -> Result<User, String> {
@@ -104,15 +123,14 @@ fn register(io: &IOHandler, net: &Net) -> Result<User, String> {
     net.add_message(
         MessageContainer::new(
             Message::new(
-                MessageType::Register{
-                    username: username,
-                    password: password,
-                    public_key: public_key
-                },
-                vec![Net::server_addr().to_string()]
+                MessageType::Server(
+                    ToServer::Register(username, password, public_key)
+                ),
+                vec![(Net::server_addr().to_string(), net.get_server_key())],
+                &net.crypto
             ),
             Some(sender),
-            None
+            true
         )
     );
 
@@ -124,15 +142,28 @@ fn register(io: &IOHandler, net: &Net) -> Result<User, String> {
         Err(e) => return Err("wtf".to_string() + e.description())
     };
 
-    if let MessageType::Response(res) = res.unwrap().msg_type {
-        match res {
-            ResponseType::User(u) => Ok(u),
-            ResponseType::Error(e) => Err(e),
-            _ => Err("Something went wrong".to_string())
+    if let MessageType::User(res) = Net::data_to_type(&res.unwrap().data) {
+        if let ToUser::ServerResponse(res) = res {
+            match res {
+                ResponseType::User(u) => Ok(u),
+                ResponseType::Error(e) => Err(e),
+                _ => Err("Something went wrong".to_string())
+            }
+        } else {
+            Err("Reply was not of type ServerResponse".to_string())
         }
     } else {
-        Err("Reply was not of type 'Response'. Whut?".to_string())
+        Err("Reply was not of type User".to_string())
     }
+    // if let MessageType::Response(res) = res.unwrap().msg_type {
+    //     match res {
+    //         ResponseType::User(u) => Ok(u),
+    //         ResponseType::Error(e) => Err(e),
+    //         _ => Err("Something went wrong".to_string())
+    //     }
+    // } else {
+    //     Err("Reply was not of type 'Response'. Whut?".to_string())
+    // }
 }
 
 fn connect(o_user: &str, net: &Net, state: &State) -> Result<(), String> {
@@ -144,7 +175,7 @@ fn connect(o_user: &str, net: &Net, state: &State) -> Result<(), String> {
     let conv = Conversation::new(
         User {
             handle: o_user.to_string(),
-            route: ui.route,
+            addr: ui.addr,
             public_key: ui.public_key
         }
     );
