@@ -5,26 +5,41 @@ use std::collections::hash_map::Entry;
 use std::sync::{Arc, Mutex, Condvar};
 use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
 use std::clone::Clone;
-//use std::io::{self, Write};
+
 extern crate rand;
 
-use net_lib::TextMessage;
+use messages::TextMessage;
 use net_lib::Net;
-use crypto_lib::KeyArr;
+use crypto_lib::Key;
 use mpmc_queue::MpmcQueue;
 
-#[derive(Clone, RustcEncodable, RustcDecodable, Hash, PartialEq, Eq)]
-pub struct UserInfo {
-    pub route: Vec<(String, KeyArr)>,
-    pub addr: String, // see if this can be replaced by a call to the last element in route.
-    pub public_key: [u8; 32],
-}
+pub type AddrPair = (String, Key);
+pub type Route = Vec<AddrPair>;
 
 #[derive(Clone, RustcEncodable, RustcDecodable, Hash, PartialEq, Eq)]
 pub struct User {
     pub handle: String,
-    pub addr: String, // replace this will addr again soon.
-    pub public_key: [u8; 32],
+    pub addr: String,
+    pub public_key: Key,
+}
+
+impl User {
+
+    pub fn new(handle: String, addr: String, key: Key) -> User {
+        User {
+            handle: handle,
+            addr: addr,
+            public_key: key
+        }
+    }
+
+    pub fn from_addr_pair(handle: String, pair: &AddrPair) -> User {
+        User {
+            handle: handle.to_string(),
+            addr: pair.0.clone(),
+            public_key: pair.1.clone()
+        }
+    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -109,7 +124,7 @@ pub struct State {
     current_conversation: Arc<Mutex<Option<u64>>>,
     unseen_message_count: Arc<Mutex<u32>>,
     channel: Arc<MpmcQueue<TextMessage>>,
-    users: Arc<Mutex<HashMap<String, UserInfo>>>,
+    users: Arc<Mutex<HashMap<String, Route>>>,
 }
 
 impl State {
@@ -125,24 +140,21 @@ impl State {
     }
 
     pub fn add_new_message(&self, msg: TextMessage) {
+        self.current_conversation.lock().unwrap().map_or_else(
+            || *self.unseen_message_count.lock().unwrap() += 1,
+            |curr|
+                if curr == msg.conv_id { self.channel.push(msg.clone()); } 
+                else { *self.unseen_message_count.lock().unwrap() += 1; }
+        );
+
         let &(ref mutex, ref cvar) = &*self.conversations;
-
-        let convs: &mut Conversations = &mut *mutex.lock().unwrap();
-        let conv: &mut Conversation = convs.entry(msg.clone().conv_id)
-            .or_insert(Conversation::from_id(msg.clone().sender, msg.clone().conv_id));
-        conv.messages.push(msg.clone());
-        conv.inc_new_msg_count();
-
-        // TODO: Fix this garbage.
-        if let Some(ref s) = *self.current_conversation.lock().unwrap() {
-            if *s == msg.clone().conv_id {
-                self.channel.push(msg.clone());
-            } else {
-                *self.unseen_message_count.lock().unwrap() += 1;
-            }
-        } else {
-            *self.unseen_message_count.lock().unwrap() += 1;
-        }
+        mutex.lock().and_then(|mut convs| {
+            let conv = convs.entry(msg.conv_id)
+                .or_insert(Conversation::from_id(msg.sender.clone(), msg.conv_id));
+            conv.messages.push(msg.clone());
+            conv.inc_new_msg_count();
+            Ok(())
+        }).unwrap();
 
         cvar.notify_one();
     }
@@ -163,23 +175,28 @@ impl State {
         self.conversations.0.lock().unwrap().insert(conv.get_id(), conv);
     }
 
-    pub fn set_current_conversation(&self, new_conv: Option<u64>) -> Option<Vec<TextMessage>> {
-        *self.current_conversation.lock().unwrap() = new_conv;
-        if let Some(conv) = new_conv {
-            let ref mut curr = *self.conversations.0.lock().unwrap();
-            let mut curr2: &mut Conversation = match curr.get_mut(&conv) {
-                Some(c) => c,
-                None => {
-                    panic!("failed in set_current_conversation");
-                }
-            };
-            curr2.set_new_message_count(0);
-            let mut c = curr2.messages.clone();
-            c.reverse(); // TODO: this doesn't need to be reversed.
-            Some(c)
-        } else {
-            None
-        }
+    pub fn get_message_history(&self) -> Option<Vec<TextMessage>> {
+        self.current_conversation.lock().unwrap()
+            .and_then(|curr| {
+                self.conversations.0.lock().unwrap()
+                    .get(&curr)
+                    .and_then(|c| Some(c.messages.clone()))
+            })
+        
+    }
+
+    pub fn set_current_conversation(&self, conv: Option<u64>) -> Result<(), &'static str> {
+        *self.current_conversation.lock().unwrap() = conv;
+
+        conv.map_or_else(
+            || Ok(()), 
+            |new_conv| self.conversations.0.lock().unwrap()
+                .get_mut(&new_conv)
+                .and_then(|conv| {
+                    conv.set_new_message_count(0);
+                    Some(())
+                })
+                .ok_or("Conversation does not exist."))
     }
 
     pub fn list_conversations(&self) -> Vec<String> {
@@ -192,26 +209,15 @@ impl State {
     }
 
     pub fn conv_name_to_id(&self, name: &str) -> Option<u64> {
-        for conv in self.conversations.0.lock().unwrap().values() {
-            if conv.get_partner().handle.trim() == name.trim() {
-                return Some(conv.get_id());
-            }
-        }
-        None
+        self.conversations.0.lock().unwrap().values()
+            .find(|&c| c.get_partner().handle.trim() == name.trim())
+            .and_then(|c| Some(c.get_id()))
     }
 
-    pub fn get_user_info(&self, user: &str, net: &Net) -> Result<UserInfo, String> {
+    pub fn get_route(&self, user: &str, net: &Net) -> Result<Route, String> {
         match self.users.lock().unwrap().entry(user.to_string()) {
             Entry::Occupied(o) => Ok(o.get().clone()),
-            Entry::Vacant(v) => {
-                net.get_user_info(&user).map(|ui| v.insert(ui).clone())
-                /*match net.get_user_info(&user) {
-                    Ok(ui) => {
-                        Ok(v.insert(ui).clone())
-                    },
-                    Err(e) => Err(e.to_string())
-                }*/
-            }
+            Entry::Vacant(v) => net.get_route(&user).map(|ui| v.insert(ui).clone())
         }
     }
 }

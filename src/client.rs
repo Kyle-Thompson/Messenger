@@ -16,14 +16,15 @@ mod net_lib;
 mod mpmc_queue;
 mod state;
 mod command;
+mod messages;
 mod crypto_lib;
 
 use net_lib::Net;
-use net_lib::Message;
-use net_lib::MessageType;
-use net_lib::MessageContainer;
-use net_lib::TextMessage;
-use net_lib::ToUser;
+use messages::Message;
+use messages::MessageType;
+use messages::MessageContainer;
+use messages::TextMessage;
+use messages::ToUser;
 use crypto_lib::Crypto;
 use io_lib::IOHandler;
 use state::State;
@@ -71,13 +72,9 @@ fn main() {
     let net = Net::new(Crypto::new(priv_key, pub_key));
         
     crossbeam::scope(|scope| {
-        scope.spawn(|| {
-            network_receiver(&net, &state);
-        });
+        scope.spawn(|| network_receiver(&net, &state));
         
-        scope.spawn(|| {
-            display_output(&io, &state);
-        });
+        scope.spawn(|| display_output(&io, &state));
         
         handle_user_input(&io, &net, &state);
     });
@@ -114,10 +111,8 @@ fn handle_user_input(io: &IOHandler, net: &Net, state: &State) {
             
             if curr_conv.is_none() {
                 io.print_error("No current conversation.");
-                continue;
             } else if user.is_none() {
                 io.print_error("Not logged in");
-                continue;
             } else {
                 let conv_id = curr_conv.as_ref().unwrap().get_id(); 
                 let tm = TextMessage {
@@ -129,7 +124,7 @@ fn handle_user_input(io: &IOHandler, net: &Net, state: &State) {
                 let mc = MessageContainer::new(
                     Message::new(
                         MessageType::User(ToUser::Text(tm.clone())), 
-                        state.get_user_info(&partner.handle, &net).unwrap().route,
+                        state.get_route(&partner.handle, &net).unwrap(),
                         &net.crypto
                     ),
                     None,

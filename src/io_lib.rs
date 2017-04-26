@@ -2,7 +2,7 @@
 
 use std::io::{self, Write};
 
-use net_lib::TextMessage;
+use messages::TextMessage;
 
 pub struct IOHandler;
 

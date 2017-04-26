@@ -5,7 +5,9 @@ use std::env;
 use std::io::Read;
 
 use io_lib::IOHandler;
-use net_lib::*;
+use net_lib::Net;
+use messages::{MessageContainer, Message};
+use messages::{MessageType, ResponseType, ToServer, ToUser};
 use state::*;
 
 pub fn handle(io: &IOHandler, net: &Net, state: &State, user: &mut Option<User>, tokens: &[&str]) {
@@ -59,7 +61,8 @@ fn login(io: &IOHandler, net: &Net) -> Result<User, String> {
 
     // Get the public key.
     let mut public_key = [0u8; 32];
-    let mut pub_key_file = File::open(env::home_dir().unwrap().join(".secmsg/keys/public")).unwrap();
+    let mut pub_key_file = File::open(env::home_dir().unwrap()
+        .join(".secmsg/keys/public")).unwrap();
     pub_key_file.read_exact(&mut public_key).unwrap();
 
     let (sender, receiver) = channel();
@@ -67,10 +70,8 @@ fn login(io: &IOHandler, net: &Net) -> Result<User, String> {
     net.add_message(
         MessageContainer::new(
             Message::new(
-                MessageType::Server(
-                    ToServer::Login(username, password, public_key)
-                ),
-                vec![(Net::server_addr().to_string(), net.get_server_key())],
+                MessageType::Server(ToServer::Login(username, password, public_key)),
+                net.get_server_route(),
                 &net.crypto
             ),
             Some(sender),
@@ -96,16 +97,6 @@ fn login(io: &IOHandler, net: &Net) -> Result<User, String> {
     } else {
         Err("Reply was not of type User".to_string())
     }
-
-    // if let MessageType::Response(res) = res.unwrap().msg_type {
-    //     match res {
-    //         ResponseType::User(u) => Ok(u),
-    //         ResponseType::Error(e) => Err(e),
-    //         _ => Err("Something went wrong".to_string())
-    //     }
-    // } else {
-    //     Err("Reply was not of type 'Response'. Whut?".to_string())
-    // }
 }
 
 fn register(io: &IOHandler, net: &Net) -> Result<User, String> {
@@ -115,7 +106,8 @@ fn register(io: &IOHandler, net: &Net) -> Result<User, String> {
 
     // Get the public key.
     let mut public_key = [0u8; 32];
-    let mut pub_key_file = File::open(env::home_dir().unwrap().join(".secmsg/keys/public")).unwrap();
+    let mut pub_key_file = File::open(env::home_dir().unwrap()
+        .join(".secmsg/keys/public")).unwrap();
     pub_key_file.read_exact(&mut public_key).unwrap();
 
     let (sender, receiver) = channel();
@@ -155,45 +147,31 @@ fn register(io: &IOHandler, net: &Net) -> Result<User, String> {
     } else {
         Err("Reply was not of type User".to_string())
     }
-    // if let MessageType::Response(res) = res.unwrap().msg_type {
-    //     match res {
-    //         ResponseType::User(u) => Ok(u),
-    //         ResponseType::Error(e) => Err(e),
-    //         _ => Err("Something went wrong".to_string())
-    //     }
-    // } else {
-    //     Err("Reply was not of type 'Response'. Whut?".to_string())
-    // }
 }
 
 fn connect(o_user: &str, net: &Net, state: &State) -> Result<(), String> {
-    let ui: UserInfo = match state.get_user_info(&o_user, net) {
-        Ok(ui) => ui,
+    let r: Route = match state.get_route(&o_user, net) {
+        Ok(r) => r,
         Err(e) => return Err(e),
     };
 
-    let conv = Conversation::new(
-        User {
-            handle: o_user.to_string(),
-            addr: ui.addr,
-            public_key: ui.public_key
-        }
-    );
+    let conv = Conversation::new(User::from_addr_pair(o_user.to_string(), &r[r.len()-1]));
     
     let conv_id = conv.get_id();
     state.add_conversation(conv);
-    state.set_current_conversation(Some(conv_id));
+    state.set_current_conversation(Some(conv_id)).unwrap();
     Ok(())
 }
 
 fn leave(state: &State, io: &IOHandler) {
-    state.set_current_conversation(None);
+    state.set_current_conversation(None).unwrap();
     io.print_conversations(state.list_conversations());
 }
 
 fn join(conv: &str, state: &State, io: &IOHandler) {
     if let Some(id) = state.conv_name_to_id(&conv) {
-        io.print_messages(state.set_current_conversation(Some(id)).unwrap());
+        state.set_current_conversation(Some(id)).unwrap();
+        io.print_messages(state.get_message_history().unwrap());
     } else {
         io.print_error("invalid conversation id");
     }

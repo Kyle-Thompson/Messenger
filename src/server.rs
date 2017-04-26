@@ -8,7 +8,6 @@ use std::str;
 use std::cmp;
 use std::env;
 use std::fs::{self, File};
-//use std::io;
 
 extern crate rustc_serialize;
 use rustc_serialize::json;
@@ -18,17 +17,17 @@ extern crate rand;
 
 mod io_lib;
 mod net_lib;
+mod messages;
 mod mpmc_queue;
 mod state;
 mod crypto_lib;
 
-use net_lib::{Message, MessageType, ResponseType};
-use net_lib::{ToUser, ToServer};
+use messages::{Message, MessageType, ResponseType};
+use messages::{ToUser, ToServer};
 use net_lib::Net;
 use crypto_lib::Crypto;
-use crypto_lib::KeyArr;
+use crypto_lib::Key;
 use state::User;
-use state::UserInfo;
 
 const SERVER_ADDR: &'static str = "0.0.0.0:5001";
 const PUB_KEY_ADDR: &'static str = "0.0.0.0:5002";
@@ -99,7 +98,6 @@ fn main() {
     });
 }
 
-
 // TODO: Just to be safe, should this not maybe be an optional Message or maybe result?
 fn receive_unencrypted_message_type(stream: &mut TcpStream) -> MessageType {
 
@@ -139,17 +137,6 @@ fn receive_message(stream: &mut TcpStream, crypto: &Crypto) -> Message {
 
 fn send_response(mut stream: TcpStream, res: Message) {
 
-    // Encode the message.
-    //println!("Message before encoding: {}", json::encode(&res).unwrap());
-    //let encoded_msg: Vec<u8> = json::encode(&res.data).unwrap().into_bytes();
-
-    //println!("Number of bytes before encrypt {}", encoded_msg.len());
-
-    // Encrypt the message.
-    //let encrypted_msg: Vec<u8> = crypto.encrypt(&key, &encoded_msg).unwrap();
-    //println!("Number of bytes after encrypt {}", encrypted_msg.len());
-    //io::stdout().flush().unwrap();
-
     // Check the message size.
     if res.data.len() >= u32::max_value() as usize { return; }
 
@@ -176,21 +163,21 @@ fn addr_to_string(stream: &TcpStream) -> String {
     }
 }
 
-fn gen_route(user_ip: &str, key: &KeyArr) -> Vec<(String, KeyArr)> {
+fn gen_route(user_ip: &str, key: &Key) -> Vec<(String, Key)> {
     vec![(user_ip.to_string(), key.clone())]
 }
 
-fn generate_route(users: &HashMap<String, KnownUser>, dest: (String, KeyArr)) -> Vec<(String, KeyArr)> {
-    let mut r = vec![];
+// TODO: This does not generate a random route. Implement a new HashMap to allow for random indexing.
+fn generate_route(users: &HashMap<String, KnownUser>, dest: (String, Key)) -> Vec<(String, Key)> {
+    let mut r = vec![dest];
     let n = cmp::min(3, users.len());
     for v in users.values().take(n) {
         r.push((v.addr.clone(), v.public_key.clone()))
     }
-    r.push(dest);
     r
 }
 
-fn login_response(username: String, password: String, users: &UserMap, usr_ip: String, crypto: &Crypto, key: &KeyArr) -> Message {
+fn login_response(username: String, password: String, users: &UserMap, usr_ip: String, crypto: &Crypto, key: &Key) -> Message {
     let route = gen_route(&usr_ip, &key);
     match users.lock().unwrap().get(&username) {
         Some(u) => {
@@ -236,7 +223,7 @@ fn login_response(username: String, password: String, users: &UserMap, usr_ip: S
     }
 }
 
-fn register_response(username: String, password: String, public_key: [u8; 32], users: &UserMap, usr_ip: String, crypto: &Crypto, key: &KeyArr) -> Message {
+fn register_response(username: String, password: String, public_key: [u8; 32], users: &UserMap, usr_ip: String, crypto: &Crypto, key: &Key) -> Message {
     let route = gen_route(&usr_ip, &key);
     let ref mut users = *users.lock().unwrap();
     // this can probably be simplified using users.entry()
@@ -274,19 +261,14 @@ fn register_response(username: String, password: String, public_key: [u8; 32], u
     }
 }
 
-fn connect_response(name: String, users: &UserMap, route: Vec<(String, KeyArr)>, crypto: &Crypto) -> Message {
+fn connect_response(name: String, users: &UserMap, route: Vec<(String, Key)>, crypto: &Crypto) -> Message {
     let ref users = *users.lock().unwrap();
     match users.get(&name) {
-        Some(known_user) => Message::new(
+        Some(user) => Message::new(
             MessageType::User(
                 ToUser::ServerResponse(
                     ResponseType::Connection(
-                        UserInfo {
-                            //route: vec![(known_user.addr.clone(), known_user.public_key.clone())],
-                            route: generate_route(users, (known_user.addr.clone(), known_user.public_key.clone())),
-                            addr: known_user.addr.clone(),
-                            public_key: known_user.public_key.clone()
-                        }
+                        generate_route(users, (user.addr.clone(), user.public_key.clone())),
                     )
                 )
             ),
@@ -324,7 +306,6 @@ fn create_response(msg: &Message, users: &UserMap, stream: &TcpStream, crypto: &
 
 }
 
-
 fn handler(mut stream: TcpStream, users: UserMap, crypto: Crypto) {
     let msg: Message = receive_message(&mut stream, &crypto);
     let response = create_response(&msg, &users, &stream, &crypto).unwrap();
@@ -355,20 +336,3 @@ fn pub_key_handler(mut stream: TcpStream, pubkey: [u8; 32], crypto: &Crypto) {
     };
     send_response(stream, response);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
