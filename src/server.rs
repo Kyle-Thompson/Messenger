@@ -35,9 +35,21 @@ const PUB_KEY_ADDR: &'static str = "0.0.0.0:5002";
 #[derive(Clone, RustcEncodable, RustcDecodable, Hash, PartialEq, Eq)]
 pub struct KnownUser {
     pub handle: String,
-    pub addr: String,
     pub password: String,
-    pub public_key: [u8; 32],
+    pub addr: String,
+    pub public_key: Key,
+}
+
+impl KnownUser {
+
+    pub fn new(handle: String, password: String, addr: String, key: &Key) -> KnownUser {
+        KnownUser{
+            handle: handle, 
+            password: password, 
+            addr: addr, 
+            public_key: key.clone()
+        }
+    }
 }
 type UserMap = Arc<Mutex<HashMap<String, KnownUser>>>;
 
@@ -158,7 +170,8 @@ fn addr_to_string(stream: &TcpStream) -> String {
         },
         SocketAddr::V6(v) => {
             let s = v.ip().segments();
-            format!("{}.{}.{}.{}.{}.{}.{}.{}:5000", s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7])
+            format!("{}.{}.{}.{}.{}.{}.{}.{}:5000", 
+                s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7])
         }
     }
 }
@@ -223,11 +236,11 @@ fn login_response(username: String, password: String, users: &UserMap, usr_ip: S
     }
 }
 
-fn register_response(username: String, password: String, public_key: [u8; 32], users: &UserMap, usr_ip: String, crypto: &Crypto, key: &Key) -> Message {
-    let route = gen_route(&usr_ip, &key);
+fn register_response(user: KnownUser, users: &UserMap, crypto: &Crypto) -> Message {
+    let route = gen_route(&user.addr, &user.public_key);
     let ref mut users = *users.lock().unwrap();
     // this can probably be simplified using users.entry()
-    match users.get(&username) {
+    match users.get(&user.handle) {
         Some(_) => Message::new(
             MessageType::User(ToUser::ServerResponse(ResponseType::Error (
                 "Username already in use.".to_string()
@@ -236,20 +249,15 @@ fn register_response(username: String, password: String, public_key: [u8; 32], u
             &crypto
         ),
         None => {
-            users.insert(username.clone(), KnownUser {
-                handle: username.clone(),
-                addr: usr_ip.clone(),
-                password: password.clone(),
-                public_key: public_key.clone()
-            });
+            users.insert(user.handle.clone(), user.clone());
             Message::new(
                 MessageType::User(
                     ToUser::ServerResponse(
                         ResponseType::User(
                             User {
-                                handle: username.clone(),
-                                addr: usr_ip,
-                                public_key: public_key.clone()
+                                handle: user.handle.clone(),
+                                addr: user.addr.clone(),
+                                public_key: user.public_key.clone()
                             }
                         )
                     )
@@ -263,7 +271,7 @@ fn register_response(username: String, password: String, public_key: [u8; 32], u
 
 fn connect_response(name: String, users: &UserMap, route: Vec<(String, Key)>, crypto: &Crypto) -> Message {
     let ref users = *users.lock().unwrap();
-    match users.get(&name) {
+    match users.get(&*name) {
         Some(user) => Message::new(
             MessageType::User(
                 ToUser::ServerResponse(
@@ -287,16 +295,16 @@ fn connect_response(name: String, users: &UserMap, route: Vec<(String, Key)>, cr
     }
 }
 
-fn create_response(msg: &Message, users: &UserMap, stream: &TcpStream, crypto: &Crypto) -> Result<Message, ()> {
-    let usr_ip = addr_to_string(&stream);
-    if let MessageType::Server(ref msg) = Net::data_to_type(&msg.data) {
-        match *msg {
-            ToServer::Login(ref username, ref password, ref public_key) =>
-                Ok(login_response(username.clone(), password.clone(), &users, usr_ip, &crypto, public_key)),
-            ToServer::Register(ref username, ref password, ref public_key) =>
-                Ok(register_response(username.clone(), password.clone(), *public_key, &users, usr_ip, &crypto, public_key)),
-            ToServer::Connect(ref name, ref public_key) =>
-                Ok(connect_response(name.clone(), &users, gen_route(&usr_ip, &public_key), &crypto)),
+fn create_response(msg: Message, users: &UserMap, stream: &TcpStream, crypto: &Crypto) -> Result<Message, ()> {
+    let addr = addr_to_string(&stream);
+    if let MessageType::Server(msg) = Net::data_to_type(&msg.data) {
+        match msg {
+            ToServer::Login(username, password, key) =>
+                Ok(login_response(username, password, &users, addr, &crypto, &key)),
+            ToServer::Register(handle, password, key) =>
+                Ok(register_response(KnownUser::new(handle, password, addr, &key), &users, &crypto)),
+            ToServer::Connect(name, public_key) =>
+                Ok(connect_response(name, &users, gen_route(&addr, &public_key), &crypto)),
             ToServer::PublicKey(_) =>
                 Err(())
         }
@@ -308,7 +316,7 @@ fn create_response(msg: &Message, users: &UserMap, stream: &TcpStream, crypto: &
 
 fn handler(mut stream: TcpStream, users: UserMap, crypto: Crypto) {
     let msg: Message = receive_message(&mut stream, &crypto);
-    let response = create_response(&msg, &users, &stream, &crypto).unwrap();
+    let response = create_response(msg, &users, &stream, &crypto).unwrap();
     send_response(stream, response);
 }
 
